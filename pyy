@@ -1,0 +1,1795 @@
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+
+local lp = Players.LocalPlayer
+local prefix = ";"
+local defaultPrefix = ";"
+
+local PARENT = Instance.new("ScreenGui")
+PARENT.ResetOnSpawn = false
+PARENT.DisplayOrder = 2147483647
+PARENT.Name = "SpyTool"
+if gethui then
+    PARENT.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(PARENT)
+    PARENT.Parent = game:GetService("CoreGui")
+else
+    PARENT.Parent = game:GetService("CoreGui")
+end
+
+local ESPenabled = false
+local espLoops = {}
+local soloESPPlayers = {}
+local playerAddedConns = {}
+
+local espAlpha = 0
+local LOCAL_ESP_HIDE_DIST = 15
+
+local toggleESPKey = nil
+local toggleESPConn = nil
+
+local toggleFCKey = nil
+local toggleFCConn = nil
+
+-- ========== ESP ==========
+local function clearESP(plr)
+    if espLoops[plr.Name] then
+        espLoops[plr.Name]:Disconnect()
+        espLoops[plr.Name] = nil
+    end
+    for _, v in pairs(PARENT:GetChildren()) do
+        if v.Name == plr.Name .. "_SPY_ESP" then v:Destroy() end
+    end
+end
+
+local function makeESP(plr)
+    if not ESPenabled and not soloESPPlayers[plr.Name] then return end
+    clearESP(plr)
+    task.spawn(function()
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        if not ESPenabled and not soloESPPlayers[plr.Name] then return end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+            or char:FindFirstChild("Torso")
+            or char:FindFirstChild("UpperTorso")
+        if not root then return end
+
+        local isLocal = (plr == lp)
+        local espColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.new(1,1,1)
+        local hpFillColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(80,220,80)
+
+        local sg = Instance.new("ScreenGui")
+        sg.Name           = plr.Name .. "_SPY_ESP"
+        sg.ResetOnSpawn   = false
+        sg.IgnoreGuiInset = true
+        sg.DisplayOrder   = 999
+        sg.Parent         = PARENT
+
+        local box = Instance.new("Frame")
+        box.BackgroundTransparency = 1
+        box.BorderSizePixel        = 0
+        box.ZIndex                 = 2
+        box.Parent                 = sg
+
+        local thick = 1
+        local t = Instance.new("Frame")
+        t.BackgroundColor3 = espColor; t.BackgroundTransparency = espAlpha; t.BorderSizePixel = 0; t.ZIndex = 3
+        t.Position = UDim2.new(0,0,0,0); t.Size = UDim2.new(1,0,0,thick); t.Parent = box
+
+        local b = Instance.new("Frame")
+        b.BackgroundColor3 = espColor; b.BackgroundTransparency = espAlpha; b.BorderSizePixel = 0; b.ZIndex = 3
+        b.Position = UDim2.new(0,0,1,-thick); b.Size = UDim2.new(1,0,0,thick); b.Parent = box
+
+        local l = Instance.new("Frame")
+        l.BackgroundColor3 = espColor; l.BackgroundTransparency = espAlpha; l.BorderSizePixel = 0; l.ZIndex = 3
+        l.Position = UDim2.new(0,0,0,0); l.Size = UDim2.new(0,thick,1,0); l.Parent = box
+
+        local r = Instance.new("Frame")
+        r.BackgroundColor3 = espColor; r.BackgroundTransparency = espAlpha; r.BorderSizePixel = 0; r.ZIndex = 3
+        r.Position = UDim2.new(1,-thick,0,0); r.Size = UDim2.new(0,thick,1,0); r.Parent = box
+
+        local hpText = Instance.new("TextLabel")
+        hpText.BackgroundTransparency = 1
+        hpText.AnchorPoint            = Vector2.new(1,1)
+        hpText.Position               = UDim2.new(1,-2,1,-2)
+        hpText.Size                   = UDim2.new(0,40,0,14)
+        hpText.Font                   = Enum.Font.GothamBold
+        hpText.TextSize               = 10
+        hpText.TextColor3             = espColor
+        hpText.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+        hpText.TextStrokeColor3       = Color3.new(0,0,0)
+        hpText.TextXAlignment         = Enum.TextXAlignment.Right
+        hpText.ZIndex                 = 4
+        hpText.Text                   = "100%"
+        hpText.Parent                 = box
+
+        local nameText = Instance.new("TextLabel")
+        nameText.BackgroundTransparency = 1
+        nameText.AnchorPoint            = Vector2.new(0.5, 1)
+        nameText.Position = UDim2.new(0.5, 0, 0, -2)
+        nameText.Size = UDim2.new(1, 0, 0, 14)
+        nameText.Font = Enum.Font.GothamBold
+        nameText.TextSize = 10
+        nameText.TextColor3 = espColor
+        nameText.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+        nameText.TextStrokeColor3 = Color3.new(0,0,0)
+        nameText.TextXAlignment = Enum.TextXAlignment.Center
+        nameText.ZIndex = 4
+        nameText.Text = plr.Name
+        nameText.Parent = box
+
+        local hpBarBg = Instance.new("Frame")
+        hpBarBg.BackgroundColor3       = Color3.fromRGB(20,20,20)
+        hpBarBg.BackgroundTransparency = math.min(0.15 + espAlpha * 0.85, 1)
+        hpBarBg.BorderSizePixel        = 0
+        hpBarBg.ZIndex                 = 2
+        hpBarBg.Parent                 = sg
+
+        local hpFill = Instance.new("Frame")
+        hpFill.BackgroundColor3 = hpFillColor
+        hpFill.BorderSizePixel  = 0
+        hpFill.AnchorPoint      = Vector2.new(0,0)
+        hpFill.Position         = UDim2.new(0,0,0,0)
+        hpFill.Size             = UDim2.new(1,0,1,0)
+        hpFill.ZIndex           = 3
+        hpFill.Parent           = hpBarBg
+
+        local cam = workspace.CurrentCamera
+
+        local loop = RunService.RenderStepped:Connect(function()
+            if not ESPenabled and not soloESPPlayers[plr.Name] then
+                sg.Enabled = false
+                return
+            end
+            if not (sg and sg.Parent) then return end
+            if not (char and char.Parent and hum and hum.Parent and root and root.Parent) then
+                sg.Enabled = false
+                return
+            end
+
+            local camPos = cam.CFrame.Position
+            local distance = (camPos - root.Position).Magnitude
+
+            if isLocal and distance < LOCAL_ESP_HIDE_DIST then
+                sg.Enabled = false
+                return
+            end
+
+            nameText.Visible = distance > 13
+
+            local headPos = root.Position + Vector3.new(0, 2.8, 0)
+            local feetPos = root.Position - Vector3.new(0, 3.2, 0)
+
+            local hSc, hVis = cam:WorldToViewportPoint(headPos)
+            local fSc       = cam:WorldToViewportPoint(feetPos)
+
+            if not hVis or hSc.Z < 0 then
+                sg.Enabled = false
+                return
+            end
+            sg.Enabled = true
+
+            local screenH = math.max(math.abs(hSc.Y - fSc.Y), 10)
+            local screenW = screenH * 0.55
+            local cx      = hSc.X
+            local topY    = math.min(hSc.Y, fSc.Y)
+            local leftX   = cx - screenW * 0.5
+            local rightX  = cx + screenW * 0.5
+            local barW    = math.max(2, math.floor(screenW * 0.08))
+
+            box.Position     = UDim2.new(0, leftX,     0, topY)
+            box.Size         = UDim2.new(0, screenW,    0, screenH)
+
+            hpBarBg.Position = UDim2.new(0, rightX + 2, 0, topY)
+            hpBarBg.Size     = UDim2.new(0, barW,        0, screenH)
+
+            local hpSize = math.clamp(math.floor(screenH * 0.1), 6, 14)
+            hpText.TextSize = hpSize
+            hpText.Size = UDim2.new(1, -4, 0, hpSize + 2)
+            hpText.Position = UDim2.new(1, -2, 1, -2)
+            nameText.TextSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
+
+            local hp  = math.clamp(hum.Health, 0, hum.MaxHealth)
+            local mx  = math.max(hum.MaxHealth, 1)
+            local pct = hp / mx
+
+            hpFill.Size             = UDim2.new(1, 0, pct, 0)
+            hpFill.Position         = UDim2.new(0, 0, 1 - pct, 0)
+            if not isLocal then
+                hpFill.BackgroundColor3 = Color3.new(
+                    math.clamp(2*(1-pct), 0, 1),
+                    math.clamp(2*pct,     0, 1),
+                    0
+                )
+            end
+            hpText.Text = math.floor(pct*100) .. "%"
+        end)
+
+        espLoops[plr.Name] = loop
+
+        plr.CharacterAdded:Connect(function()
+            loop:Disconnect()
+            espLoops[plr.Name] = nil
+            if sg and sg.Parent then sg:Destroy() end
+            task.wait(1)
+            if ESPenabled or soloESPPlayers[plr.Name] then
+                makeESP(plr)
+            end
+        end)
+    end)
+end
+
+local function makeESPSolo(plr)
+    soloESPPlayers[plr.Name] = true
+    makeESP(plr)
+end
+
+local function clearESPSolo(plr)
+    soloESPPlayers[plr.Name] = nil
+    clearESP(plr)
+    if ESPenabled then makeESP(plr) end
+end
+
+local function enableESPAll()
+    ESPenabled = true
+    for _, plr in pairs(Players:GetPlayers()) do
+        makeESP(plr)
+    end
+    for _, plr in pairs(Players:GetPlayers()) do
+        if not playerAddedConns[plr.Name] then
+            playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
+                task.wait(1)
+                if ESPenabled then makeESP(plr) end
+            end)
+        end
+    end
+end
+
+local function disableESPAll()
+    ESPenabled = false
+    for _, plr in pairs(Players:GetPlayers()) do
+        if not soloESPPlayers[plr.Name] then
+            clearESP(plr)
+        end
+    end
+    for name, conn in pairs(playerAddedConns) do
+        conn:Disconnect()
+        playerAddedConns[name] = nil
+    end
+end
+
+local function applyESPTransparency()
+    for _, sg in pairs(PARENT:GetChildren()) do
+        if sg:IsA("ScreenGui") and sg.Name:find("_SPY_ESP$") then
+            local function scanFrames(parent, depth)
+                for _, child in pairs(parent:GetChildren()) do
+                    if child:IsA("Frame") then
+                        local frameKids = 0
+                        for _, k in pairs(child:GetChildren()) do
+                            if k:IsA("Frame") then frameKids += 1 end
+                        end
+                        if frameKids == 1 then
+                            child.BackgroundTransparency = math.min(0.15 + espAlpha * 0.85, 1)
+                        elseif frameKids == 0 and depth == 2 then
+                            child.BackgroundTransparency = espAlpha
+                        end
+                        scanFrames(child, depth + 1)
+                    elseif child:IsA("TextLabel") then
+                        local baseColor = child.BackgroundColor3
+                        child.TextColor3 = Color3.new(baseColor.R, baseColor.G, baseColor.B)
+                        child.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+                    end
+                end
+            end
+            scanFrames(sg, 1)
+        end
+    end
+end
+
+-- ========== FREECAM ==========
+local fcRunning = false
+local cameraPos = Vector3.new()
+local cameraRot = Vector2.new()
+local Camera = workspace.CurrentCamera
+local cameraFov = 70
+
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    if workspace.CurrentCamera then Camera = workspace.CurrentCamera end
+end)
+
+local INPUT_PRIORITY = Enum.ContextActionPriority.High.Value
+
+local Spring = {}
+Spring.__index = Spring
+function Spring.new(freq, pos)
+    local self = setmetatable({}, Spring)
+    self.f = freq; self.p = pos; self.v = pos * 0
+    return self
+end
+function Spring:Update(dt, goal)
+    local f = self.f * 2 * math.pi
+    local offset = goal - self.p
+    local decay = math.exp(-f * dt)
+    local p1 = goal + (self.v * dt - offset * (f * dt + 1)) * decay
+    local v1 = (f * dt * (offset * f - self.v) + self.v) * decay
+    self.p = p1; self.v = v1
+    return p1
+end
+function Spring:Reset(pos) self.p = pos; self.v = pos * 0 end
+
+local velSpring = Spring.new(5, Vector3.new())
+local panSpring  = Spring.new(5, Vector2.new())
+
+local FCInput = {}
+do
+    local keyboard = {W=0,A=0,S=0,D=0,E=0,Q=0,Up=0,Down=0}
+    local mouse = {Delta = Vector2.new()}
+    local NAV_SPEED = Vector3.new(1,1,1)
+    local PAN_SPEED = Vector2.new(1,1) * (math.pi/64)
+    local NAV_ADJ   = 0.75
+    local NAV_SHIFT = 0.25
+    local navSpeed  = 1
+
+    function FCInput.Vel(dt)
+        navSpeed = math.clamp(navSpeed + dt*(keyboard.Up-keyboard.Down)*NAV_ADJ, 0.01, 4)
+        local k = Vector3.new(keyboard.D-keyboard.A, keyboard.E-keyboard.Q, keyboard.S-keyboard.W) * NAV_SPEED
+        return k * (navSpeed * (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and NAV_SHIFT or 1))
+    end
+    function FCInput.Pan(dt)
+        local p = mouse.Delta * PAN_SPEED
+        mouse.Delta = Vector2.new()
+        return p
+    end
+    local function Keypress(_, state, input)
+        keyboard[input.KeyCode.Name] = state == Enum.UserInputState.Begin and 1 or 0
+        return Enum.ContextActionResult.Sink
+    end
+    local function MousePan(_, _, input)
+        mouse.Delta = Vector2.new(-input.Delta.Y, -input.Delta.X)
+        return Enum.ContextActionResult.Sink
+    end
+    local function Zero(t) for k,v in pairs(t) do t[k]=v*0 end end
+    function FCInput.SetSpeed(v) NAV_SPEED = Vector3.new(v,v,v) end
+    function FCInput.GetSpeed() return NAV_SPEED.X end
+    function FCInput.StartCapture()
+        ContextActionService:BindActionAtPriority("FC_KB", Keypress, false, INPUT_PRIORITY,
+            Enum.KeyCode.W,Enum.KeyCode.A,Enum.KeyCode.S,Enum.KeyCode.D,
+            Enum.KeyCode.E,Enum.KeyCode.Q,Enum.KeyCode.Up,Enum.KeyCode.Down)
+        ContextActionService:BindActionAtPriority("FC_MP", MousePan, false, INPUT_PRIORITY,
+            Enum.UserInputType.MouseMovement)
+    end
+    function FCInput.StopCapture()
+        navSpeed = 1; Zero(keyboard); Zero(mouse)
+        ContextActionService:UnbindAction("FC_KB")
+        ContextActionService:UnbindAction("FC_MP")
+    end
+end
+
+local PlayerState = {}
+do
+    local s = {}
+    local mouseWasVisible = true
+    local savedCharCF = nil
+    local freezeConn = nil
+    
+    function PlayerState.Push()
+        s.fov = Camera.FieldOfView
+        s.type = Camera.CameraType
+        s.cf = Camera.CFrame
+        s.focus = Camera.Focus
+        s.icon = UserInputService.MouseIconEnabled
+        s.mb = UserInputService.MouseBehavior
+        
+        mouseWasVisible = UserInputService.MouseIconEnabled
+        
+        -- GUARDAR la posición del personaje para CONGELARLO
+        local char = lp.Character
+        if char then
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if root then
+                savedCharCF = root.CFrame
+            end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                s.autoRotate = hum.AutoRotate
+                hum.AutoRotate = false
+            end
+        end
+        
+        -- CONGELAR el personaje: forzar su CFrame cada frame
+        freezeConn = RunService.RenderStepped:Connect(function()
+            if not fcRunning then
+                if freezeConn then
+                    freezeConn:Disconnect()
+                    freezeConn = nil
+                end
+                return
+            end
+            local c = lp.Character
+            if c and savedCharCF then
+                local r = c:FindFirstChild("HumanoidRootPart")
+                if r then
+                    r.CFrame = savedCharCF
+                end
+                local h = c:FindFirstChildOfClass("Humanoid")
+                if h and h.AutoRotate then
+                    h.AutoRotate = false
+                end
+            end
+        end)
+        
+        Camera.FieldOfView = 70
+        Camera.CameraType = Enum.CameraType.Scriptable
+        UserInputService.MouseIconEnabled = true
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    end
+    
+    function PlayerState.Pop()
+        Camera.FieldOfView = s.fov or 70
+        Camera.CameraType  = s.type or Enum.CameraType.Custom
+        Camera.CFrame      = s.cf or Camera.CFrame
+        Camera.Focus       = s.focus or Camera.Focus
+        
+        UserInputService.MouseIconEnabled = mouseWasVisible
+        local mb = s.mb or Enum.MouseBehavior.Default
+        UserInputService.MouseBehavior = mb
+        task.delay(0.1, function()
+            if not fcRunning then
+                UserInputService.MouseBehavior = mb
+            end
+        end)
+        
+        -- DETENER el congelamiento
+        if freezeConn then
+            freezeConn:Disconnect()
+            freezeConn = nil
+        end
+        
+        -- Restaurar AutoRotate
+        local char = lp.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.AutoRotate = true
+            end
+        end
+        
+        savedCharCF = nil
+    end
+end
+
+local function GetFocusDistance(cf)
+    local znear   = 0.1
+    local vp      = Camera.ViewportSize
+    local projy   = 2 * math.tan(math.rad(cameraFov/2))
+    local projx   = vp.X / vp.Y * projy
+    local minDist = 512
+    for x = 0,1,0.5 do for y = 0,1,0.5 do
+        local offset = cf.RightVector*(x-.5)*projx - cf.UpVector*(y-.5)*projy + cf.LookVector
+        local _, hit = workspace:FindPartOnRay(Ray.new(cf.Position + offset.Unit*znear, offset.Unit*minDist))
+        local d = (hit - cf.Position).Magnitude
+        if d < minDist then minDist = d end
+    end end
+    return cf.LookVector:Dot(cf.LookVector) * minDist
+end
+
+local function StepFreecam(dt)
+    local clampedDt = math.min(dt, 1/30)
+    
+    local vel = velSpring:Update(clampedDt, FCInput.Vel(clampedDt))
+    local pan = panSpring:Update(clampedDt, FCInput.Pan(clampedDt))
+    local zoom = math.sqrt(math.tan(math.rad(70/2)) / math.tan(math.rad(cameraFov/2)))
+    
+    cameraRot = cameraRot + pan * Vector2.new(0.75,1) * 8 * (clampedDt/zoom)
+    cameraRot = Vector2.new(math.clamp(cameraRot.X,-math.rad(90),math.rad(90)), cameraRot.Y%(2*math.pi))
+    
+    local newCF = CFrame.new(cameraPos) * CFrame.fromOrientation(cameraRot.X, cameraRot.Y, 0) * CFrame.new(vel*64*clampedDt)
+    cameraPos = newCF.Position
+    Camera.CFrame = newCF
+    Camera.Focus  = newCF * CFrame.new(0,0,-GetFocusDistance(newCF))
+    Camera.FieldOfView = cameraFov
+end
+
+local freecamClickConn = nil
+local flyToConn = nil
+local flyTarget = nil
+local flyTargetPlayer = nil
+
+local function stopFlyTo()
+    if flyToConn then
+        flyToConn:Disconnect()
+        flyToConn = nil
+    end
+    flyTarget = nil
+    flyTargetPlayer = nil
+end
+
+local function flyToPosition(targetPos, lookAtPos)
+    if flyToConn then
+        flyToConn:Disconnect()
+        flyToConn = nil
+    end
+    
+    flyTarget = targetPos
+    local startPos = cameraPos
+    local startPitch = cameraRot.X
+    
+    local targetPitch = startPitch
+    if lookAtPos then
+        local dir = lookAtPos - targetPos
+        local horizontalDist = math.sqrt(dir.X * dir.X + dir.Z * dir.Z)
+        targetPitch = math.atan2(dir.Y, horizontalDist)
+        targetPitch = math.clamp(targetPitch, -math.rad(60), math.rad(10))
+    end
+    
+    local duration = 0.5
+    local elapsed = 0
+    
+    flyToConn = RunService.RenderStepped:Connect(function(dt)
+        if not fcRunning or flyTarget ~= targetPos then
+            if flyToConn then
+                flyToConn:Disconnect()
+                flyToConn = nil
+            end
+            return
+        end
+        
+        elapsed = elapsed + dt
+        local progress = math.min(elapsed / duration, 1)
+        local eased = progress < 0.5 and 2 * progress * progress or 1 - math.pow(-2 * progress + 2, 2) / 2
+        
+        cameraPos = startPos:Lerp(targetPos, eased)
+        
+        cameraRot = Vector2.new(
+            startPitch + (targetPitch - startPitch) * eased,
+            cameraRot.Y
+        )
+        
+        if progress >= 1 then
+            flyToConn:Disconnect()
+            flyToConn = nil
+            flyTarget = nil
+        end
+    end)
+end
+
+-- ========== FOV CLICK-THROUGH ==========
+local FC_FOV_ANGLE = 70
+local FC_HEIGHT_OFFSET = 4
+local FC_BEHIND_OFFSET = 6
+
+local function getPlayerInFOV()
+    local cam = workspace.CurrentCamera
+    local camPos = cam.CFrame.Position
+    local camLook = cam.CFrame.LookVector
+    
+    local bestPlayer = nil
+    local bestAngle = math.rad(FC_FOV_ANGLE / 2)
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= lp and p.Character then
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+                or p.Character:FindFirstChild("Torso")
+                or p.Character:FindFirstChild("UpperTorso")
+            
+            if root then
+                local toPlayer = (root.Position - camPos).Unit
+                local angle = math.acos(math.clamp(camLook:Dot(toPlayer), -1, 1))
+                
+                if angle < bestAngle then
+                    bestAngle = angle
+                    bestPlayer = p
+                end
+            end
+        end
+    end
+    
+    return bestPlayer
+end
+
+local function enableFreecamClickThrough()
+    if freecamClickConn then return end
+    freecamClickConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if not fcRunning then return end
+        if gp then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        
+        local targetPlayer = getPlayerInFOV()
+        
+        if targetPlayer and targetPlayer.Character then
+            local root = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                or targetPlayer.Character:FindFirstChild("Torso")
+                or targetPlayer.Character:FindFirstChild("UpperTorso")
+            
+            if root then
+                local cam = workspace.CurrentCamera
+                local behindDir = -cam.CFrame.LookVector
+                local behindOffset = Vector3.new(behindDir.X * FC_BEHIND_OFFSET, 0, behindDir.Z * FC_BEHIND_OFFSET)
+                local targetPos = root.Position + Vector3.new(0, FC_HEIGHT_OFFSET, 0) + behindOffset
+                
+                flyToPosition(targetPos, root.Position)
+                flyTargetPlayer = targetPlayer
+            end
+        end
+    end)
+end
+
+local function disableFreecamClickThrough()
+    if freecamClickConn then
+        freecamClickConn:Disconnect()
+        freecamClickConn = nil
+    end
+    stopFlyTo()
+end
+
+local function stopFreecam()
+    if not fcRunning then return end
+    disableFreecamClickThrough()
+    FCInput.StopCapture()
+    RunService:UnbindFromRenderStep("SpyFreecam")
+    PlayerState.Pop()
+    fcRunning = false
+end
+
+local function startFreecam(pos)
+    if fcRunning then stopFreecam() return end
+    cameraFov = Camera.FieldOfView
+    cameraPos = (pos or Camera.CFrame).Position
+    cameraRot = Vector2.new()
+    velSpring:Reset(Vector3.new()); panSpring:Reset(Vector2.new())
+    PlayerState.Push()
+    RunService:BindToRenderStep("SpyFreecam", Enum.RenderPriority.Camera.Value, StepFreecam)
+    FCInput.StartCapture()
+    fcRunning = true
+    enableFreecamClickThrough()
+end
+
+-- ========== VIEW ==========
+local viewing = nil
+local _viewConns = {}
+
+local function stopView()
+    for _, c in pairs(_viewConns) do c:Disconnect() end
+    _viewConns = {}
+    viewing = nil
+    Camera.CameraSubject = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+    Camera.CameraType = Enum.CameraType.Custom
+end
+
+local function startView(plr)
+    if fcRunning then
+        stopFreecam()
+        pcall(updateBtn, "fc", false)
+    end
+    stopView()
+    if not plr or not plr.Character then return end
+    viewing = plr
+    Camera.CameraSubject = plr.Character
+    table.insert(_viewConns, plr.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        if viewing == plr then Camera.CameraSubject = char end
+    end))
+    table.insert(_viewConns, Camera:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+        if viewing then Camera.CameraSubject = viewing.Character end
+    end))
+end
+
+-- ========== FULLBRIGHT ==========
+local origLighting = {
+    Brightness=Lighting.Brightness, ClockTime=Lighting.ClockTime,
+    FogEnd=Lighting.FogEnd, GlobalShadows=Lighting.GlobalShadows,
+    OutdoorAmbient=Lighting.OutdoorAmbient,
+}
+local fbEnabled = false
+
+local function setFullbright(on)
+    fbEnabled = on
+    if on then
+        Lighting.Brightness=2; Lighting.ClockTime=14; Lighting.FogEnd=100000
+        Lighting.GlobalShadows=false; Lighting.OutdoorAmbient=Color3.fromRGB(128,128,128)
+    else
+        for k,v in pairs(origLighting) do Lighting[k]=v end
+    end
+end
+
+local function doRejoin()
+    if #Players:GetPlayers() <= 1 then
+        lp:Kick("\nRejoining..."); task.wait()
+        TeleportService:Teleport(game.PlaceId, lp)
+    else
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, lp)
+    end
+end
+
+local function findPlayer(query)
+    if not query or query == "" then return nil end
+    query = query:lower()
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr.Name:lower():sub(1,#query) == query or
+           plr.DisplayName:lower():sub(1,#query) == query then
+            return plr
+        end
+    end
+end
+
+-- ========== GUI ==========
+local C_BG      = Color3.fromRGB(18, 18, 20)
+local C_PANEL   = Color3.fromRGB(26, 26, 29)
+local C_BORDER  = Color3.fromRGB(38, 38, 42)
+local C_BTN     = Color3.fromRGB(32, 32, 36)
+local C_BTNHI   = Color3.fromRGB(44, 44, 50)
+local C_ACTIVE  = Color3.fromRGB(58, 100, 180)
+local C_REJECT  = Color3.fromRGB(130, 45, 45)
+local C_TEXT    = Color3.fromRGB(210, 210, 215)
+local C_SUBTEXT = Color3.fromRGB(120, 120, 130)
+local C_HINT    = Color3.fromRGB(100, 150, 220)
+local C_WARN    = Color3.fromRGB(200, 160, 60)
+
+local function makeLine(parent, pos, size)
+    local f = Instance.new("Frame")
+    f.BackgroundColor3 = C_BORDER
+    f.BorderSizePixel  = 0
+    f.Position         = pos
+    f.Size             = size
+    f.Parent           = parent
+    return f
+end
+
+local gui = Instance.new("Frame")
+gui.BackgroundColor3 = C_BG
+gui.BorderSizePixel  = 0
+gui.Position         = UDim2.new(1,-240,1,-220)
+gui.Size             = UDim2.new(0,230,0,210)
+gui.Active           = true
+gui.Visible          = false
+gui.Parent           = PARENT
+Instance.new("UICorner", gui).CornerRadius = UDim.new(0,4)
+
+makeLine(gui, UDim2.new(0,0,0,0),  UDim2.new(1,0,0,1))
+makeLine(gui, UDim2.new(0,0,1,-1), UDim2.new(1,0,0,1))
+makeLine(gui, UDim2.new(0,0,0,0),  UDim2.new(0,1,1,0))
+makeLine(gui, UDim2.new(1,-1,0,0), UDim2.new(0,1,1,0))
+
+local titleBar = Instance.new("Frame")
+titleBar.BackgroundColor3 = C_PANEL
+titleBar.BorderSizePixel  = 0
+titleBar.Size             = UDim2.new(1,0,0,28)
+titleBar.Parent           = gui
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0,4)
+makeLine(titleBar, UDim2.new(0,0,1,-1), UDim2.new(1,0,0,1))
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.BackgroundTransparency = 1
+titleLabel.Position               = UDim2.new(0,10,0,0)
+titleLabel.Size                   = UDim2.new(1,-40,1,0)
+titleLabel.Font                   = Enum.Font.SourceSansSemibold
+titleLabel.TextSize               = 13
+titleLabel.Text                   = "SPY TOOL"
+titleLabel.TextColor3             = C_TEXT
+titleLabel.TextXAlignment         = Enum.TextXAlignment.Left
+titleLabel.Parent                 = titleBar
+
+local pageNavFrame = Instance.new("Frame")
+pageNavFrame.BackgroundTransparency = 1
+pageNavFrame.Position               = UDim2.new(1,-90,0,6)
+pageNavFrame.Size                   = UDim2.new(0,60,0,16)
+pageNavFrame.Parent                 = titleBar
+
+local pageButtons = {}
+local currentPage = 1
+
+local function createPageBtn(text, page, offsetX)
+    local btn = Instance.new("TextButton")
+    btn.BackgroundColor3 = C_BTN
+    btn.BorderSizePixel  = 0
+    btn.Position         = UDim2.new(0,offsetX,0,0)
+    btn.Size             = UDim2.new(0,18,0,16)
+    btn.Font             = Enum.Font.SourceSansBold
+    btn.TextSize         = 10
+    btn.Text             = text
+    btn.TextColor3       = C_SUBTEXT
+    btn.AutoButtonColor  = false
+    btn.Parent           = pageNavFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,3)
+    
+    btn.MouseEnter:Connect(function()
+        if currentPage ~= page then btn.BackgroundColor3 = C_BTNHI end
+    end)
+    btn.MouseLeave:Connect(function()
+        if currentPage ~= page then btn.BackgroundColor3 = C_BTN end
+    end)
+    
+    pageButtons[page] = btn
+    return btn
+end
+
+createPageBtn("1", 1, 0)
+createPageBtn("2", 2, 21)
+createPageBtn("?", 3, 42)
+
+local prefixWaiting = false
+
+local prefixBox = Instance.new("TextButton")
+prefixBox.BackgroundColor3 = C_BORDER
+prefixBox.BorderSizePixel  = 0
+prefixBox.Position         = UDim2.new(1,-26,0,6)
+prefixBox.Size             = UDim2.new(0,18,0,16)
+prefixBox.Font             = Enum.Font.SourceSansBold
+prefixBox.TextSize         = 12
+prefixBox.Text             = prefix
+prefixBox.TextColor3       = C_HINT
+prefixBox.Parent           = titleBar
+Instance.new("UICorner", prefixBox).CornerRadius = UDim.new(0,3)
+
+local prefixHint = Instance.new("TextLabel")
+prefixHint.BackgroundColor3       = C_PANEL
+prefixHint.BackgroundTransparency = 0
+prefixHint.BorderSizePixel        = 0
+prefixHint.Position               = UDim2.new(0,8,0,29)
+prefixHint.Size                   = UDim2.new(1,-16,0,14)
+prefixHint.Font                   = Enum.Font.SourceSansItalic
+prefixHint.TextSize               = 11
+prefixHint.Text                   = ""
+prefixHint.TextColor3             = C_WARN
+prefixHint.TextXAlignment         = Enum.TextXAlignment.Center
+prefixHint.Visible                = false
+prefixHint.ZIndex                 = 15
+prefixHint.Parent                 = gui
+
+local function setPrefixWaiting(state)
+    prefixWaiting = state
+    if state then
+        prefixBox.BackgroundColor3 = C_WARN
+        prefixBox.TextColor3       = C_BG
+        prefixBox.Text             = "?"
+        prefixHint.Text            = "Press a key for the new prefix"
+        prefixHint.Visible         = true
+    else
+        prefixBox.BackgroundColor3 = C_BORDER
+        prefixBox.TextColor3       = C_HINT
+        prefixBox.Text             = prefix
+        prefixHint.Visible         = false
+    end
+end
+
+prefixBox.MouseButton1Click:Connect(function()
+    if not prefixWaiting then
+        setPrefixWaiting(true)
+    else
+        prefix = defaultPrefix
+        setPrefixWaiting(false)
+    end
+end)
+
+local dragging, dragStart, startPos
+titleBar.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        if i.Target == prefixBox then return end
+        dragging = true; dragStart = i.Position; startPos = gui.Position
+        i.Changed:Connect(function()
+            if i.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - dragStart
+        gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
+    end
+end)
+
+local hintBar = Instance.new("Frame")
+hintBar.BackgroundColor3 = C_PANEL
+hintBar.BorderSizePixel  = 0
+hintBar.Position         = UDim2.new(0,0,0,28)
+hintBar.Size             = UDim2.new(1,0,0,18)
+hintBar.Visible          = false
+hintBar.Parent           = gui
+makeLine(hintBar, UDim2.new(0,0,1,-1), UDim2.new(1,0,0,1))
+
+local hintLabel = Instance.new("TextLabel")
+hintLabel.BackgroundTransparency = 1
+hintLabel.Position               = UDim2.new(0,8,0,0)
+hintLabel.Size                   = UDim2.new(1,-16,1,0)
+hintLabel.Font                   = Enum.Font.SourceSansItalic
+hintLabel.TextSize               = 11
+hintLabel.Text                   = ""
+hintLabel.TextColor3             = C_HINT
+hintLabel.TextXAlignment         = Enum.TextXAlignment.Left
+hintLabel.TextTruncate           = Enum.TextTruncate.AtEnd
+hintLabel.Parent                 = hintBar
+
+local cmdBarFrame = Instance.new("Frame")
+cmdBarFrame.BackgroundColor3 = C_PANEL
+cmdBarFrame.BorderSizePixel  = 0
+cmdBarFrame.Position         = UDim2.new(0,0,0,46)
+cmdBarFrame.Size             = UDim2.new(1,0,0,26)
+cmdBarFrame.Parent           = gui
+makeLine(cmdBarFrame, UDim2.new(0,0,1,-1), UDim2.new(1,0,0,1))
+
+local cmdBar = Instance.new("TextBox")
+cmdBar.BackgroundTransparency = 1
+cmdBar.BorderSizePixel        = 0
+cmdBar.Position               = UDim2.new(0,10,0,0)
+cmdBar.Size                   = UDim2.new(1,-20,1,0)
+cmdBar.Font                   = Enum.Font.SourceSans
+cmdBar.TextSize               = 14
+cmdBar.TextColor3             = C_TEXT
+cmdBar.PlaceholderText        = "Type a command..."
+cmdBar.PlaceholderColor3      = C_SUBTEXT
+cmdBar.Text                   = ""
+cmdBar.TextXAlignment         = Enum.TextXAlignment.Left
+cmdBar.ClearTextOnFocus       = false
+cmdBar.Parent                 = cmdBarFrame
+
+local acFrame = Instance.new("ScrollingFrame")
+acFrame.BackgroundColor3 = C_PANEL
+acFrame.BorderSizePixel   = 0
+acFrame.Position          = UDim2.new(0,0,1,2)
+acFrame.Size              = UDim2.new(1,0,0,0)
+acFrame.Visible           = false
+acFrame.ScrollBarThickness = 4
+acFrame.ScrollBarImageColor3 = C_BORDER
+acFrame.CanvasSize        = UDim2.new(0,0,0,0)
+acFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+acFrame.ZIndex            = 20
+acFrame.Parent            = cmdBarFrame
+Instance.new("UICorner", acFrame).CornerRadius = UDim.new(0,3)
+
+local acList = Instance.new("UIListLayout")
+acList.Padding = UDim.new(0,2)
+acList.Parent  = acFrame
+
+local acItems = {}
+local acPlayers = {}
+local acSelectedIdx = 0
+local acCurrentCmd = nil
+local AC_MAX_ITEMS = 6
+
+local function clearAC()
+    for _, item in pairs(acItems) do item:Destroy() end
+    acItems = {}
+    acPlayers = {}
+    acSelectedIdx = 0
+    acFrame.Visible = false
+    acFrame.Size = UDim2.new(1,0,0,0)
+end
+
+local function updateACSelection()
+    for i, item in pairs(acItems) do
+        if i == acSelectedIdx then
+            item.BackgroundColor3 = C_ACTIVE
+            item.TextColor3 = Color3.new(1,1,1)
+        else
+            item.BackgroundColor3 = C_BTN
+            item.TextColor3 = C_TEXT
+        end
+    end
+end
+
+local function showAC(cmd, query)
+    clearAC()
+    acCurrentCmd = cmd
+    local q = (query or ""):lower()
+    local matches = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == lp and (cmd == "view" or cmd == "spectate") then continue end
+        local name = plr.Name
+        local display = plr.DisplayName
+        if name:lower():find(q, 1, true) or display:lower():find(q, 1, true) then
+            table.insert(matches, plr)
+        end
+    end
+    table.sort(matches, function(a,b)
+        local aDisplay = a.DisplayName:lower()
+        local bDisplay = b.DisplayName:lower()
+        if aDisplay ~= bDisplay then
+            return aDisplay < bDisplay
+        end
+        return a.Name:lower() < b.Name:lower()
+    end)
+    if #matches == 0 then return end
+
+    local shown = math.min(#matches, AC_MAX_ITEMS)
+    local itemH = 22
+    acFrame.Size = UDim2.new(1,0,0,shown*itemH + (shown-1)*2 + 4)
+
+    for i = 1, shown do
+        local plr = matches[i]
+        local btn = Instance.new("TextButton")
+        btn.BackgroundColor3 = C_BTN
+        btn.BorderSizePixel  = 0
+        btn.Size             = UDim2.new(1,-4,0,itemH)
+        btn.Font             = Enum.Font.SourceSans
+        btn.TextSize         = 12
+        btn.TextColor3       = C_TEXT
+        btn.TextXAlignment   = Enum.TextXAlignment.Left
+        btn.AutoButtonColor  = false
+        btn.ZIndex           = 21
+        btn.Parent           = acFrame
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,2)
+
+        local pad = Instance.new("UIPadding")
+        pad.PaddingLeft = UDim.new(0,6)
+        pad.Parent = btn
+
+        local label = plr.Name
+        if plr.DisplayName ~= plr.Name then
+            label = plr.Name .. "  ·  " .. plr.DisplayName
+        end
+        btn.Text = label
+
+        btn.MouseEnter:Connect(function()
+            acSelectedIdx = i
+            updateACSelection()
+        end)
+        btn.MouseButton1Click:Connect(function()
+            cmdBar.Text = cmd .. " " .. plr.Name
+            clearAC()
+            task.spawn(function() cmdBar:CaptureFocus() end)
+        end)
+        table.insert(acItems, btn)
+        table.insert(acPlayers, plr)
+    end
+    acSelectedIdx = 1
+    updateACSelection()
+    acFrame.Visible = true
+end
+
+local PLAYER_CMDS = {"view","spectate","esp","unesp"}
+
+local function parseACInput(text)
+    local t = text:lower():gsub("^%s+","")
+    for _, c in pairs(PLAYER_CMDS) do
+        if t:sub(1,#c+1) == c.." " then
+            local query = t:sub(#c+2)
+            if not query:find(" ") then
+                return c, query
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function updateHint(hint)
+    if hint ~= "" then
+        hintLabel.Text  = "  " .. hint
+        hintBar.Visible = true
+    else
+        hintBar.Visible = false
+    end
+end
+
+local btnSection = Instance.new("Frame")
+btnSection.BackgroundTransparency = 1
+btnSection.Position               = UDim2.new(0,8,0,80)
+btnSection.Size                   = UDim2.new(1,-16,0,122)
+btnSection.Parent                 = gui
+
+local GAP   = 5
+local BTN_H = 28
+local ROW_H = BTN_H + GAP
+
+local btnDefs = {
+    {text="ESP",        key="esp",    row=0, col=0},
+    {text="Freecam",    key="fc",     row=0, col=1},
+    {text="Fullbright", key="fb",     row=1, col=0},
+    {text="Fix Camera", key="fixcam", row=1, col=1},
+    {text="Rejoin",     key="rejoin", row=2, col=0, full=true},
+}
+
+local buttons   = {}
+local btnActive = {}
+
+local function updateBtn(key, on)
+    local btn = buttons[key]
+    if not btn then return end
+    btnActive[key] = on
+    if on then
+        btn.BackgroundColor3 = key == "rejoin" and C_REJECT or C_ACTIVE
+        btn.TextColor3       = Color3.new(1,1,1)
+    else
+        btn.BackgroundColor3 = C_BTN
+        btn.TextColor3       = C_SUBTEXT
+    end
+end
+
+local function updateESPBtnText()
+    local btn = buttons["esp"]
+    if not btn then return end
+    if toggleESPKey then
+        btn.Text = "ESP (" .. toggleESPKey:upper() .. ")"
+    else
+        btn.Text = "ESP"
+    end
+end
+
+local function updateFCBtnText()
+    local btn = buttons["fc"]
+    if not btn then return end
+    if toggleFCKey then
+        btn.Text = "Freecam (" .. toggleFCKey:upper() .. ")"
+    else
+        btn.Text = "Freecam"
+    end
+end
+
+local function setToggleESPKey(keyName)
+    if toggleESPConn then
+        toggleESPConn:Disconnect()
+        toggleESPConn = nil
+    end
+    if not keyName or keyName == "" then
+        toggleESPKey = nil
+        updateESPBtnText()
+        return
+    end
+    local specialKeys = {
+        [";"] = "Semicolon", ["."] = "Period", [","] = "Comma",
+        ["/"] = "Slash", ["\\"] = "BackSlash",
+    }
+    local keyCode
+    if specialKeys[keyName] then
+        keyCode = Enum.KeyCode[specialKeys[keyName]]
+    elseif #keyName == 1 then
+        keyCode = Enum.KeyCode[keyName:upper()]
+    else
+        local ok, kc = pcall(function() return Enum.KeyCode[keyName] end)
+        if ok and kc then keyCode = kc end
+    end
+    if not keyCode then return end
+    toggleESPKey = #keyName == 1 and keyName:lower() or keyName
+    updateESPBtnText()
+    toggleESPConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if cmdBar:IsFocused() then return end
+        if input.KeyCode == keyCode then
+            if ESPenabled then
+                disableESPAll()
+                updateBtn("esp", false)
+            else
+                enableESPAll()
+                updateBtn("esp", true)
+            end
+        end
+    end)
+end
+
+local function setToggleFCKey(keyName)
+    if toggleFCConn then
+        toggleFCConn:Disconnect()
+        toggleFCConn = nil
+    end
+    if not keyName or keyName == "" then
+        toggleFCKey = nil
+        updateFCBtnText()
+        return
+    end
+    local specialKeys = {
+        [";"] = "Semicolon", ["."] = "Period", [","] = "Comma",
+        ["/"] = "Slash", ["\\"] = "BackSlash",
+    }
+    local keyCode
+    if specialKeys[keyName] then
+        keyCode = Enum.KeyCode[specialKeys[keyName]]
+    elseif #keyName == 1 then
+        keyCode = Enum.KeyCode[keyName:upper()]
+    else
+        local ok, kc = pcall(function() return Enum.KeyCode[keyName] end)
+        if ok and kc then keyCode = kc end
+    end
+    if not keyCode then return end
+    toggleFCKey = #keyName == 1 and keyName:lower() or keyName
+    updateFCBtnText()
+    toggleFCConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if cmdBar:IsFocused() then return end
+        if input.KeyCode == keyCode then
+            if fcRunning then
+                stopFreecam()
+                updateBtn("fc", false)
+            else
+                startFreecam()
+                updateBtn("fc", true)
+            end
+        end
+    end)
+end
+
+for _, d in ipairs(btnDefs) do
+    local btn = Instance.new("TextButton")
+    if d.full then
+        btn.Position = UDim2.new(0,0,0,d.row*ROW_H)
+        btn.Size     = UDim2.new(1,0,0,BTN_H)
+    else
+        btn.Position = UDim2.new(d.col*0.5, d.col==1 and GAP or 0, 0, d.row*ROW_H)
+        btn.Size     = UDim2.new(0.5, -math.ceil(GAP/2), 0, BTN_H)
+    end
+    btn.BackgroundColor3 = C_BTN
+    btn.BorderSizePixel  = 0
+    btn.Font             = Enum.Font.SourceSansSemibold
+    btn.TextSize         = 12
+    btn.Text             = d.text
+    btn.TextColor3       = C_SUBTEXT
+    btn.Parent           = btnSection
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,3)
+    btn.MouseEnter:Connect(function()
+        if not btnActive[d.key] then btn.BackgroundColor3 = C_BTNHI end
+    end)
+    btn.MouseLeave:Connect(function()
+        if not btnActive[d.key] then btn.BackgroundColor3 = C_BTN end
+    end)
+    buttons[d.key]   = btn
+    btnActive[d.key] = false
+end
+
+buttons["esp"].MouseButton1Click:Connect(function()
+    if ESPenabled then disableESPAll(); updateBtn("esp", false)
+    else enableESPAll(); updateBtn("esp", true) end
+end)
+
+buttons["fb"].MouseButton1Click:Connect(function()
+    setFullbright(not fbEnabled); updateBtn("fb", fbEnabled)
+end)
+
+buttons["fc"].MouseButton1Click:Connect(function()
+    cmdBar:ReleaseFocus()
+    startFreecam(); task.wait(0.05); updateBtn("fc", fcRunning)
+end)
+
+buttons["fixcam"].MouseButton1Click:Connect(function()
+    stopFreecam(); stopView()
+    Camera.CameraType    = Enum.CameraType.Custom
+    Camera.FieldOfView   = 70
+    Camera.CameraSubject = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+    updateBtn("fc", false)
+end)
+
+buttons["rejoin"].MouseButton1Click:Connect(function() doRejoin() end)
+
+-- ========== PAGE 2 ==========
+local page2Frame = Instance.new("Frame")
+page2Frame.BackgroundTransparency = 1
+page2Frame.Position               = UDim2.new(0,8,0,80)
+page2Frame.Size                   = UDim2.new(1,-16,0,122)
+page2Frame.Visible                = false
+page2Frame.Parent                 = gui
+
+local fcSpeedLabel = Instance.new("TextLabel")
+fcSpeedLabel.BackgroundTransparency = 1
+fcSpeedLabel.Position = UDim2.new(0,0,0,0)
+fcSpeedLabel.Size = UDim2.new(0.55,-4,0,14)
+fcSpeedLabel.Font = Enum.Font.SourceSans
+fcSpeedLabel.TextSize = 11
+fcSpeedLabel.Text = "FreeCam Speed:"
+fcSpeedLabel.TextColor3 = C_TEXT
+fcSpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+fcSpeedLabel.Parent = page2Frame
+
+local fcSpeedBox = Instance.new("TextBox")
+fcSpeedBox.BackgroundColor3 = C_BTN
+fcSpeedBox.BorderSizePixel = 0
+fcSpeedBox.Position = UDim2.new(0.55,4,0,0)
+fcSpeedBox.Size = UDim2.new(0.45,-4,0,18)
+fcSpeedBox.Font = Enum.Font.SourceSans
+fcSpeedBox.TextSize = 12
+fcSpeedBox.TextColor3 = C_TEXT
+fcSpeedBox.Text = "1"
+fcSpeedBox.PlaceholderText = "1"
+fcSpeedBox.PlaceholderColor3 = C_SUBTEXT
+fcSpeedBox.Parent = page2Frame
+Instance.new("UICorner", fcSpeedBox).CornerRadius = UDim.new(0,3)
+
+fcSpeedBox.FocusLost:Connect(function(enter)
+    local v = tonumber(fcSpeedBox.Text)
+    if v and v > 0 then
+        FCInput.SetSpeed(v)
+    else
+        fcSpeedBox.Text = "1"
+        FCInput.SetSpeed(1)
+    end
+end)
+
+local viewLabel = Instance.new("TextLabel")
+viewLabel.BackgroundTransparency = 1
+viewLabel.Position = UDim2.new(0,0,0,24)
+viewLabel.Size = UDim2.new(0.55,-4,0,14)
+viewLabel.Font = Enum.Font.SourceSans
+viewLabel.TextSize = 11
+viewLabel.Text = "View Player:"
+viewLabel.TextColor3 = C_TEXT
+viewLabel.TextXAlignment = Enum.TextXAlignment.Left
+viewLabel.Parent = page2Frame
+
+local viewBox = Instance.new("TextBox")
+viewBox.BackgroundColor3 = C_BTN
+viewBox.BorderSizePixel = 0
+viewBox.Position = UDim2.new(0.55,4,0,24)
+viewBox.Size = UDim2.new(0.45,-4,0,18)
+viewBox.Font = Enum.Font.SourceSans
+viewBox.TextSize = 12
+viewBox.TextColor3 = C_TEXT
+viewBox.Text = ""
+viewBox.PlaceholderText = "username"
+viewBox.PlaceholderColor3 = C_SUBTEXT
+viewBox.Parent = page2Frame
+Instance.new("UICorner", viewBox).CornerRadius = UDim.new(0,3)
+
+viewBox.FocusLost:Connect(function(enter)
+    if viewBox.Text ~= "" then
+        local plr = findPlayer(viewBox.Text)
+        if plr then
+            startView(plr)
+        end
+        viewBox.Text = ""
+    end
+end)
+
+local unviewBtn = Instance.new("TextButton")
+unviewBtn.BackgroundColor3 = C_BTN
+unviewBtn.BorderSizePixel = 0
+unviewBtn.Position = UDim2.new(0,0,0,48)
+unviewBtn.Size = UDim2.new(1,0,0,BTN_H)
+unviewBtn.Font = Enum.Font.SourceSansSemibold
+unviewBtn.TextSize = 12
+unviewBtn.Text = "Stop Viewing"
+unviewBtn.TextColor3 = C_SUBTEXT
+unviewBtn.Parent = page2Frame
+Instance.new("UICorner", unviewBtn).CornerRadius = UDim.new(0,3)
+
+unviewBtn.MouseEnter:Connect(function() unviewBtn.BackgroundColor3 = C_BTNHI end)
+unviewBtn.MouseLeave:Connect(function() unviewBtn.BackgroundColor3 = C_BTN end)
+
+unviewBtn.MouseButton1Click:Connect(function()
+    stopView()
+end)
+
+local espTransLabel = Instance.new("TextLabel")
+espTransLabel.BackgroundTransparency = 1
+espTransLabel.Position = UDim2.new(0,0,0,82)
+espTransLabel.Size = UDim2.new(0.55,-4,0,14)
+espTransLabel.Font = Enum.Font.SourceSans
+espTransLabel.TextSize = 11
+espTransLabel.Text = "ESP Transparency:"
+espTransLabel.TextColor3 = C_TEXT
+espTransLabel.TextXAlignment = Enum.TextXAlignment.Left
+espTransLabel.Parent = page2Frame
+
+local espTransBox = Instance.new("TextBox")
+espTransBox.BackgroundColor3 = C_BTN
+espTransBox.BorderSizePixel = 0
+espTransBox.Position = UDim2.new(0.55,4,0,82)
+espTransBox.Size = UDim2.new(0.45,-4,0,18)
+espTransBox.Font = Enum.Font.SourceSans
+espTransBox.TextSize = 12
+espTransBox.TextColor3 = C_TEXT
+espTransBox.Text = "0"
+espTransBox.PlaceholderText = "0.01-0.95"
+espTransBox.PlaceholderColor3 = C_SUBTEXT
+espTransBox.Parent = page2Frame
+Instance.new("UICorner", espTransBox).CornerRadius = UDim.new(0,3)
+
+espTransBox.FocusLost:Connect(function(enter)
+    local v = tonumber(espTransBox.Text)
+    if v then
+        v = math.clamp(v, 0.01, 0.95)
+        espAlpha = v
+        applyESPTransparency()
+        espTransBox.Text = string.format("%.2f", v)
+    else
+        espTransBox.Text = string.format("%.2f", espAlpha)
+    end
+end)
+
+-- ========== PAGE 3 ==========
+local page3Frame = Instance.new("Frame")
+page3Frame.BackgroundTransparency = 1
+page3Frame.Position               = UDim2.new(0,8,0,80)
+page3Frame.Size                   = UDim2.new(1,-16,0,122)
+page3Frame.Visible                = false
+page3Frame.Parent                 = gui
+
+local infoScroll = Instance.new("ScrollingFrame")
+infoScroll.BackgroundTransparency = 1
+infoScroll.BorderSizePixel = 0
+infoScroll.Size = UDim2.new(1,0,1,0)
+infoScroll.ScrollBarThickness = 4
+infoScroll.ScrollBarImageColor3 = C_BORDER
+infoScroll.CanvasSize = UDim2.new(0,0,0,0)
+infoScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+infoScroll.Parent = page3Frame
+
+local infoList = Instance.new("UIListLayout")
+infoList.Padding = UDim.new(0,2)
+infoList.Parent = infoScroll
+
+local COMMAND_INFO = {
+    {"esp [player]",       "Toggle ESP on player (or all)"},
+    {"unesp [player]",     "Remove ESP from player"},
+    {"toggleesp [key]",    "Bind key to toggle ESP"},
+    {"togglefc [key]",     "Bind key to toggle freecam"},
+    {"togglefreecam [key]","Bind key to toggle freecam"},
+    {"view / spectate n",  "Spectate a player"},
+    {"unview / unspectate","Stop spectating"},
+    {"freecam / fc",       "Toggle free camera"},
+    {"unfreecam / unfc",   "Exit freecam"},
+    {"fcspeed / freecamspeed n", "Set freecam speed"},
+    {"fixcam",             "Reset camera"},
+    {"fb / fullbright",    "Enable fullbright"},
+    {"unfb / nofullbright","Disable fullbright"},
+    {"day",                "Set daytime"},
+    {"night",              "Set nighttime"},
+    {"nofog",              "Remove fog"},
+    {"rejoin / rj",        "Rejoin server"},
+    {"espt / esptransparency n", "Set ESP transparency"},
+}
+
+for _, entry in ipairs(COMMAND_INFO) do
+    local row = Instance.new("Frame")
+    row.BackgroundTransparency = 1
+    row.Size = UDim2.new(1,0,0,16)
+    row.Parent = infoScroll
+
+    local cmdLabel = Instance.new("TextLabel")
+    cmdLabel.BackgroundTransparency = 1
+    cmdLabel.Position = UDim2.new(0,0,0,0)
+    cmdLabel.Size     = UDim2.new(0.45,0,1,0)
+    cmdLabel.Font     = Enum.Font.Code
+    cmdLabel.TextSize = 9
+    cmdLabel.Text     = entry[1]
+    cmdLabel.TextColor3 = C_HINT
+    cmdLabel.TextXAlignment = Enum.TextXAlignment.Left
+    cmdLabel.Parent = row
+
+    local descLabel = Instance.new("TextLabel")
+    descLabel.BackgroundTransparency = 1
+    descLabel.Position = UDim2.new(0.45,0,0,0)
+    descLabel.Size     = UDim2.new(0.55,0,1,0)
+    descLabel.Font     = Enum.Font.SourceSans
+    descLabel.TextSize = 9
+    descLabel.Text     = entry[2]
+    descLabel.TextColor3 = C_TEXT
+    descLabel.TextXAlignment = Enum.TextXAlignment.Left
+    descLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    descLabel.Parent = row
+end
+
+local function switchPage(pageNum)
+    if pageNum == currentPage then return end
+    
+    btnSection.Visible = (pageNum == 1)
+    page2Frame.Visible = (pageNum == 2)
+    page3Frame.Visible = (pageNum == 3)
+    
+    for i, btn in pairs(pageButtons) do
+        if i == pageNum then
+            btn.BackgroundColor3 = C_ACTIVE
+            btn.TextColor3 = Color3.new(1,1,1)
+        else
+            btn.BackgroundColor3 = C_BTN
+            btn.TextColor3 = C_SUBTEXT
+        end
+    end
+    
+    currentPage = pageNum
+end
+
+for pageNum, btn in pairs(pageButtons) do
+    btn.MouseButton1Click:Connect(function()
+        switchPage(pageNum)
+    end)
+end
+
+switchPage(1)
+
+local previewHighlight = nil
+
+local function setPreviewHighlight(plr)
+    if previewHighlight and previewHighlight.Parent then
+        previewHighlight:Destroy()
+    end
+    previewHighlight = nil
+    
+    if not plr or not plr.Character then return end
+    
+    previewHighlight = Instance.new("Highlight")
+    previewHighlight.Adornee = plr.Character
+    previewHighlight.FillColor = Color3.fromRGB(80, 230, 120)
+    previewHighlight.FillTransparency = 0.7
+    previewHighlight.OutlineColor = Color3.fromRGB(80, 230, 120)
+    previewHighlight.OutlineTransparency = 0
+    previewHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    previewHighlight.Parent = PARENT
+end
+
+local function clearPreviewHighlight()
+    if previewHighlight and previewHighlight.Parent then
+        previewHighlight:Destroy()
+    end
+    previewHighlight = nil
+end
+
+local cmdHints = {
+    {p="^esp%s+(%S+)", h=function(m)
+        local pl = findPlayer(m)
+        if pl then
+            local has = PARENT:FindFirstChild(pl.Name.."_SPY_ESP") ~= nil
+            local n = pl.DisplayName ~= pl.Name and (pl.Name.." ("..pl.DisplayName..")") or pl.Name
+            return has and "Remove ESP — "..n or "Add ESP — "..n
+        end
+        return "esp [player]"
+    end},
+    {p="^esp$",             h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
+    {p="^unesp%s+(%S+)",   h=function(m) local pl=findPlayer(m) return pl and "Remove ESP — "..pl.Name or "unesp [player]" end},
+    {p="^unesp$",           h=function() return "Remove all ESP" end},
+    {p="^toggleesp%s*(%S*)",h=function(m)
+        if m ~= "" then return "Bind ESP toggle to key: " .. m:upper() end
+        return toggleESPKey and ("Remove toggle key (currently: "..toggleESPKey:upper()..")") or "toggleesp [key] — bind a toggle key"
+    end},
+    {p="^togglefc%s*(%S*)",h=function(m)
+        if m ~= "" then return "Bind Freecam toggle to key: " .. m:upper() end
+        return toggleFCKey and ("Remove toggle key (currently: "..toggleFCKey:upper()..")") or "togglefc [key] — bind a toggle key"
+    end},
+    {p="^togglefreecam%s*(%S*)",h=function(m)
+        if m ~= "" then return "Bind Freecam toggle to key: " .. m:upper() end
+        return toggleFCKey and ("Remove toggle key (currently: "..toggleFCKey:upper()..")") or "togglefreecam [key] — bind a toggle key"
+    end},
+    {p="^esptransparency%s*(%S*)", h=function(m)
+        local v = tonumber(m)
+        if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
+        return string.format("esptransparency [0.01–0.95]  (current: %.2f)", espAlpha)
+    end},
+    {p="^espt%s*(%S*)", h=function(m)
+        local v = tonumber(m)
+        if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
+        return string.format("espt [0.01–0.95]  (current: %.2f)", espAlpha)
+    end},
+    {p="^view%s+(%S+)",   h=function(m)
+        local pl=findPlayer(m)
+        if pl then return "Spectate "..pl.Name..(pl.DisplayName~=pl.Name and " ("..pl.DisplayName..")" or "") end
+        return "view [player]"
+    end},
+    {p="^spectate%s+(%S+)", h=function(m)
+        local pl=findPlayer(m)
+        if pl then return "Spectate "..pl.Name..(pl.DisplayName~=pl.Name and " ("..pl.DisplayName..")" or "") end
+        return "spectate [player]"
+    end},
+    {p="^unview$",        h=function() return "Stop spectating" end},
+    {p="^unspectate$",    h=function() return "Stop spectating" end},
+    {p="^freecam$",       h=function() return fcRunning and "Close freecam" or "Open freecam" end},
+    {p="^fc$",            h=function() return fcRunning and "Close freecam" or "Open freecam" end},
+    {p="^unfreecam$",     h=function() return "Close freecam" end},
+    {p="^unfc$",          h=function() return "Close freecam" end},
+    {p="^fcspeed%s+(%S*)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
+    {p="^freecamspeed%s+(%S*)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
+    {p="^fixcam$",        h=function() return "Reset camera" end},
+    {p="^fb$",            h=function() return "Enable fullbright" end},
+    {p="^fullbright$",    h=function() return "Enable fullbright" end},
+    {p="^unfb$",          h=function() return "Disable fullbright" end},
+    {p="^nofullbright$",  h=function() return "Disable fullbright" end},
+    {p="^day$",           h=function() return "Set daytime" end},
+    {p="^night$",         h=function() return "Set nighttime" end},
+    {p="^nofog$",         h=function() return "Remove fog" end},
+    {p="^rejoin$",        h=function() return "Rejoin server" end},
+    {p="^rj$",            h=function() return "Rejoin server" end},
+}
+
+local function getHint(text)
+    local t = text:lower():gsub("^%s+","")
+    if t:sub(1, #prefix) == prefix then
+        t = t:sub(#prefix + 1)
+    end
+    if t == "" then return "" end
+    for _, e in ipairs(cmdHints) do
+        local m = t:match(e.p)
+        if m ~= nil then return e.h(m) end
+    end
+    return ""
+end
+
+local function execCmd(raw)
+    local str   = raw:lower():gsub("^%s+",""):gsub("%s+$","")
+    if str == "" then return end
+    
+    local parts = str:split(" ")
+    local cmd, arg1 = parts[1], parts[2]
+
+    if cmd == "esp" then
+        if arg1 then
+            local t = findPlayer(arg1)
+            if t then
+                if soloESPPlayers[t.Name] then clearESPSolo(t) else makeESPSolo(t) end
+            end
+        else
+            if ESPenabled then disableESPAll(); updateBtn("esp", false)
+            else enableESPAll(); updateBtn("esp", true) end
+        end
+    elseif cmd == "toggleesp" then
+        if arg1 then setToggleESPKey(arg1) else setToggleESPKey(nil) end
+    elseif cmd == "togglefc" or cmd == "togglefreecam" then
+        if arg1 then setToggleFCKey(arg1) else setToggleFCKey(nil) end
+    elseif cmd == "esptransparency" or cmd == "espt" then
+        local v = tonumber(arg1)
+        if v then espAlpha = math.clamp(v, 0.01, 0.95); applyESPTransparency() end
+    elseif cmd == "unesp" then
+        if arg1 then
+            local t = findPlayer(arg1)
+            if t then clearESPSolo(t) end
+        else
+            disableESPAll(); updateBtn("esp", false)
+            soloESPPlayers = {}
+            for _, plr in pairs(Players:GetPlayers()) do clearESP(plr) end
+        end
+    elseif cmd == "view" or cmd == "spectate" then
+        local t = findPlayer(arg1 or "")
+        if t then startView(t) end
+    elseif cmd == "unview" or cmd == "unspectate" then
+        stopView()
+    elseif cmd == "freecam" or cmd == "fc" then
+        startFreecam(); task.wait(0.05); updateBtn("fc", fcRunning)
+    elseif cmd == "unfreecam" or cmd == "unfc" then
+        stopFreecam(); updateBtn("fc", false)
+    elseif cmd == "fcspeed" or cmd == "freecamspeed" then
+        local v = tonumber(arg1)
+        if v then FCInput.SetSpeed(v) end
+    elseif cmd == "fb" or cmd == "fullbright" then
+        setFullbright(true); updateBtn("fb", true)
+    elseif cmd == "unfb" or cmd == "nofullbright" then
+        setFullbright(false); updateBtn("fb", false)
+    elseif cmd == "fixcam" then
+        stopFreecam(); stopView()
+        Camera.CameraType    = Enum.CameraType.Custom
+        Camera.FieldOfView   = 70
+        Camera.CameraSubject = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+        updateBtn("fc", false)
+    elseif cmd == "rejoin" or cmd == "rj" then
+        doRejoin()
+    elseif cmd == "day"   then Lighting.ClockTime = 14
+    elseif cmd == "night" then Lighting.ClockTime = 0
+    elseif cmd == "nofog" then Lighting.FogEnd = 100000
+    end
+end
+
+cmdBar:GetPropertyChangedSignal("Text"):Connect(function()
+    if prefixWaiting then return end
+    if cmdBar.Text:find("\t") then
+        cmdBar.Text = cmdBar.Text:gsub("\t", "")
+    end
+    updateHint(getHint(cmdBar.Text))
+    local cmd, query = parseACInput(cmdBar.Text)
+    if cmd then
+        showAC(cmd, query)
+    else
+        clearAC()
+    end
+end)
+
+local hideTimer = nil
+
+local function showGUI()
+    if hideTimer then task.cancel(hideTimer); hideTimer = nil end
+    gui.Visible = true
+end
+
+local function scheduleHide()
+    if hideTimer then task.cancel(hideTimer) end
+    hideTimer = task.delay(2, function()
+        if not cmdBar:IsFocused() and not prefixWaiting then
+            gui.Visible     = false
+            hintBar.Visible = false
+            clearAC()
+            clearPreviewHighlight()
+        end
+        hideTimer = nil
+    end)
+end
+
+cmdBar.Focused:Connect(function()
+    if hideTimer then task.cancel(hideTimer); hideTimer = nil end
+    showGUI()
+end)
+
+cmdBar.FocusLost:Connect(function(enter)
+    if enter and cmdBar.Text ~= "" then
+        local raw = cmdBar.Text
+        cmdBar.Text = ""
+        
+        local cmdText = raw
+        if cmdText:sub(1, #prefix) == prefix then
+            cmdText = cmdText:sub(#prefix + 1)
+        end
+        
+        execCmd(cmdText)
+        hintBar.Visible = false
+        clearAC()
+        clearPreviewHighlight()
+    end
+    scheduleHide()
+end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if prefixWaiting then
+        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        local kn   = input.KeyCode.Name
+        local skip = {LeftShift=1,RightShift=1,LeftControl=1,RightControl=1,LeftAlt=1,RightAlt=1,
+            CapsLock=1,Tab=1,Backspace=1,Delete=1,Return=1,Escape=1,LeftSuper=1,RightSuper=1,
+            F1=1,F2=1,F3=1,F4=1,F5=1,F6=1,F7=1,F8=1,F9=1,F10=1,F11=1,F12=1}
+        if skip[kn] then return end
+        local sm = {Semicolon=";",Period=".",Comma=",",Slash="/",BackSlash="\\",
+            Quote="'",LeftBracket="[",RightBracket="]",Minus="-",Equals="=",Tilde="`",Space=" "}
+        prefix = sm[kn] or (#kn==1 and kn:lower()) or kn:sub(1,1):lower()
+        setPrefixWaiting(false)
+        return
+    end
+    
+    if not gp then
+        local kn = input.KeyCode.Name
+        local sm = {Semicolon=";",Period=".",Comma=",",Slash="/",BackSlash="\\"}
+        local ch = sm[kn] or (#kn==1 and kn:lower()) or ""
+        if ch == prefix then
+            showGUI()
+            cmdBar.Text = ""
+            task.wait(0.05)
+            cmdBar:CaptureFocus()
+            return
+        end
+    end
+    
+    if cmdBar:IsFocused() then
+        if acFrame.Visible and #acItems > 0 then
+            if input.KeyCode == Enum.KeyCode.Up then
+                acSelectedIdx = acSelectedIdx - 1
+                if acSelectedIdx < 1 then acSelectedIdx = #acItems end
+                updateACSelection()
+                if acSelectedIdx >= 1 and acSelectedIdx <= #acPlayers then
+                    setPreviewHighlight(acPlayers[acSelectedIdx])
+                end
+            elseif input.KeyCode == Enum.KeyCode.Down then
+                acSelectedIdx = acSelectedIdx + 1
+                if acSelectedIdx > #acItems then acSelectedIdx = 1 end
+                updateACSelection()
+                if acSelectedIdx >= 1 and acSelectedIdx <= #acPlayers then
+                    setPreviewHighlight(acPlayers[acSelectedIdx])
+                end
+            elseif input.KeyCode == Enum.KeyCode.Tab then
+                if acSelectedIdx >= 1 and acSelectedIdx <= #acPlayers then
+                    local plr = acPlayers[acSelectedIdx]
+                    cmdBar.Text = acCurrentCmd .. " " .. plr.Name
+                    clearAC()
+                    clearPreviewHighlight()
+                end
+            elseif input.KeyCode == Enum.KeyCode.Escape then
+                clearAC()
+                clearPreviewHighlight()
+            end
+        end
+    end
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+    if ESPenabled then
+        makeESP(plr)
+        playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
+            task.wait(1)
+            if ESPenabled then makeESP(plr) end
+        end)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    clearESP(plr)
+    soloESPPlayers[plr.Name] = nil
+    if playerAddedConns[plr.Name] then
+        playerAddedConns[plr.Name]:Disconnect()
+        playerAddedConns[plr.Name] = nil
+    end
+    if viewing == plr then stopView() end
+end)
