@@ -664,13 +664,12 @@ local function findPlayer(query)
     end
 end
 
--- ========== SOAKILL (funciona en cualquier juego con el remote) ==========
+-- ========== SOAKILL ==========
 local function doSoaKill(target)
     local char = target.Character
     if not char then return false end
     
     local ok, err = pcall(function()
-        -- Buscar el remote event paso a paso
         local RS = game:GetService("ReplicatedStorage")
         if not RS then return end
         
@@ -680,13 +679,11 @@ local function doSoaKill(target)
         local Event = Connections:FindFirstChild("HotWheeIs")
         if not Event then return end
         
-        -- Buscar la parte del cuerpo
         local leftLeg = char:FindFirstChild("LeftLeg")
         if not leftLeg then return end
         local leftLegLower = leftLeg:FindFirstChild("LeftLegLower")
         if not leftLegLower then return end
         
-        -- Disparar el evento
         Event:FireServer(
             leftLegLower,
             Vector3.new(661.64282226562, 16.34395980835, 143.05223083496),
@@ -897,12 +894,12 @@ local function doCopyName(target)
     return ok
 end
 
--- ========== AIMBOT ==========
+-- ========== AIMBOT  ==========
 local function doAimbot()
-    local ok, err = pcall(function()
+    local ok1, err1 = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/S1Adriano/sadsad/refs/heads/main/xa"))()
     end)
-    return ok
+    return ok1
 end
 
 -- ========== FLY + NOCLIP ==========
@@ -916,7 +913,7 @@ local flyState = {
     flyThread = nil,
     BG = nil,
     BV = nil,
-    flySpeed = 150
+    flySpeed = 80
 }
 
 local function startNoclip()
@@ -1428,7 +1425,6 @@ local function updateFCBtnText()
 end
 
 local function updateFlyBtnText()
-    -- No hay botón de fly en la GUI principal, solo comando
 end
 
 local function setToggleESPKey(keyName)
@@ -1750,10 +1746,11 @@ local ABUSE_COMMANDS = {
     {"soakill [player]",   "Kill player (needs remote)"},
     {"fling [player]",     "Fling a player"},
     {"goto [player]",      "Teleport to a player"},
-    {"aimbot",             "Load aimbot script"},
-    {"fly",                "Toggle fly + noclip"},
+    {"aimbot",             "Load aimbot scripts"},
+    {"fly / unfly / nofly","Toggle fly + noclip"},
     {"togglefly [key]",    "Bind key to toggle fly"},
-    {"flyspeed n",         "Set fly speed (default 150)"},
+    {"untogglefly",        "Remove fly toggle key"},
+    {"flyspeed / flyws n", "Set fly speed (default 80)"},
 }
 
 for _, entry in ipairs(COMMAND_INFO) do
@@ -1961,6 +1958,9 @@ local cmdHints = {
         if m ~= "" then return "Bind Fly toggle to key: " .. m:upper() end
         return toggleFlyKey and ("Remove toggle key (currently: "..toggleFlyKey:upper()..")") or "togglefly [key] — bind a toggle key"
     end},
+    {p="^untogglefly$", h=function()
+        return toggleFlyKey and "Remove fly toggle key (currently: "..toggleFlyKey:upper()..")" or "No fly toggle key set"
+    end},
     {p="^esptransparency%s*(%S*)", h=function(m)
         local v = tonumber(m)
         if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
@@ -2026,13 +2026,22 @@ local cmdHints = {
     end},
     {p="^aimbot$", h=function()
         if not abuseMode then return "Requires abuse mode" end
-        return "Load aimbot"
+        return "Load aimbot scripts"
     end},
     {p="^fly$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return flyState.flying and "Stop flying" or "Start flying"
     end},
+    {p="^unfly$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return flyState.flying and "Stop flying" or "Not flying"
+    end},
+    {p="^nofly$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return flyState.flying and "Stop flying" or "Not flying"
+    end},
     {p="^flyspeed%s+(%S*)",h=function(m) return "Fly speed: "..(m~="" and m or "?") end},
+    {p="^flyws%s+(%S*)",h=function(m) return "Fly speed: "..(m~="" and m or "?") end},
 }
 
 local function getHint(text)
@@ -2071,6 +2080,14 @@ local function execCmd(raw)
         if arg1 then setToggleFCKey(arg1) else setToggleFCKey(nil) end
     elseif cmd == "togglefly" then
         if arg1 then setToggleFlyKey(arg1) else setToggleFlyKey(nil) end
+    elseif cmd == "untogglefly" or cmd == "untogglefc" or cmd == "untoggleesp" then
+        if cmd == "untogglefly" then
+            setToggleFlyKey(nil)
+        elseif cmd == "untogglefc" then
+            setToggleFCKey(nil)
+        elseif cmd == "untoggleesp" then
+            setToggleESPKey(nil)
+        end
     elseif cmd == "esptransparency" or cmd == "espt" then
         local v = tonumber(arg1)
         if v then espAlpha = math.clamp(v, 0.01, 0.95); applyESPTransparency() end
@@ -2147,7 +2164,12 @@ local function execCmd(raw)
         else
             startFly()
         end
-    elseif cmd == "flyspeed" then
+    elseif cmd == "unfly" or cmd == "nofly" then
+        if not abuseMode then return end
+        if flyState.flying then
+            stopFly()
+        end
+    elseif cmd == "flyspeed" or cmd == "flyws" then
         if not abuseMode then return end
         local v = tonumber(arg1)
         if v and v > 0 then
