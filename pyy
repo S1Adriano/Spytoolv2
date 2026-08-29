@@ -894,15 +894,16 @@ local function doCopyName(target)
     return ok
 end
 
--- ========== AIMBOT  ==========
+-- ========== AIMBOT ==========
 local function doAimbot()
-    local ok1, err1 = pcall(function()
+    local ok, err = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/S1Adriano/sadsad/refs/heads/main/xa"))()
     end)
-    return ok1
+    return ok
 end
 
 -- ========== FLY + NOCLIP ==========
+local BASE_FLY_SPEED = 80
 local flyState = {
     flying = false,
     flyKeyDown = nil,
@@ -913,7 +914,7 @@ local flyState = {
     flyThread = nil,
     BG = nil,
     BV = nil,
-    flySpeed = 80
+    flySpeed = 1
 }
 
 local function startNoclip()
@@ -967,7 +968,7 @@ local function startFly()
             local camera = workspace.CurrentCamera
             if humanoid then humanoid.PlatformStand = true end
             local CONTROL = flyState.control
-            local SPEED = flyState.flySpeed
+            local SPEED = BASE_FLY_SPEED * flyState.flySpeed
             if (CONTROL.L+CONTROL.R)~=0 or (CONTROL.F+CONTROL.B)~=0 or (CONTROL.Q+CONTROL.E)~=0 then
                 flyState.BV.Velocity = ((camera.CFrame.LookVector*(CONTROL.F+CONTROL.B)) + ((camera.CFrame*CFrame.new(CONTROL.L+CONTROL.R,(CONTROL.F+CONTROL.B+CONTROL.Q+CONTROL.E)*0.2,0).p) - camera.CFrame.p))*SPEED
             else
@@ -1746,11 +1747,11 @@ local ABUSE_COMMANDS = {
     {"soakill [player]",   "Kill player (needs remote)"},
     {"fling [player]",     "Fling a player"},
     {"goto [player]",      "Teleport to a player"},
-    {"aimbot",             "Load aimbot scripts"},
+    {"aimbot",             "Load aimbot script"},
     {"fly / unfly / nofly","Toggle fly + noclip"},
     {"togglefly [key]",    "Bind key to toggle fly"},
     {"untogglefly",        "Remove fly toggle key"},
-    {"flyspeed / flyws n", "Set fly speed (default 80)"},
+    {"flyspeed / flyws n", "Set fly speed multiplier (default 1)"},
 }
 
 for _, entry in ipairs(COMMAND_INFO) do
@@ -2026,7 +2027,7 @@ local cmdHints = {
     end},
     {p="^aimbot$", h=function()
         if not abuseMode then return "Requires abuse mode" end
-        return "Load aimbot scripts"
+        return "Load aimbot script"
     end},
     {p="^fly$", h=function()
         if not abuseMode then return "Requires abuse mode" end
@@ -2040,8 +2041,16 @@ local cmdHints = {
         if not abuseMode then return "Requires abuse mode" end
         return flyState.flying and "Stop flying" or "Not flying"
     end},
-    {p="^flyspeed%s+(%S*)",h=function(m) return "Fly speed: "..(m~="" and m or "?") end},
-    {p="^flyws%s+(%S*)",h=function(m) return "Fly speed: "..(m~="" and m or "?") end},
+    {p="^flyspeed%s+(%S*)",h=function(m)
+        local v = tonumber(m)
+        if v then return string.format("Fly speed multiplier: %.2fx", v) end
+        return string.format("Fly speed multiplier: %.2fx (1 = normal)", flyState.flySpeed)
+    end},
+    {p="^flyws%s+(%S*)",h=function(m)
+        local v = tonumber(m)
+        if v then return string.format("Fly speed multiplier: %.2fx", v) end
+        return string.format("Fly speed multiplier: %.2fx (1 = normal)", flyState.flySpeed)
+    end},
 }
 
 local function getHint(text)
@@ -2080,14 +2089,12 @@ local function execCmd(raw)
         if arg1 then setToggleFCKey(arg1) else setToggleFCKey(nil) end
     elseif cmd == "togglefly" then
         if arg1 then setToggleFlyKey(arg1) else setToggleFlyKey(nil) end
-    elseif cmd == "untogglefly" or cmd == "untogglefc" or cmd == "untoggleesp" then
-        if cmd == "untogglefly" then
-            setToggleFlyKey(nil)
-        elseif cmd == "untogglefc" then
-            setToggleFCKey(nil)
-        elseif cmd == "untoggleesp" then
-            setToggleESPKey(nil)
-        end
+    elseif cmd == "untogglefly" then
+        setToggleFlyKey(nil)
+    elseif cmd == "untogglefc" then
+        setToggleFCKey(nil)
+    elseif cmd == "untoggleesp" then
+        setToggleESPKey(nil)
     elseif cmd == "esptransparency" or cmd == "espt" then
         local v = tonumber(arg1)
         if v then espAlpha = math.clamp(v, 0.01, 0.95); applyESPTransparency() end
