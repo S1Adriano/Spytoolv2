@@ -214,9 +214,6 @@ local function makeESP(plr)
             cam = workspace.CurrentCamera
         end
 
-        local failCount = 0
-        local MAX_FAILS = 30
-
         local loop = RunService.RenderStepped:Connect(function()
             if not ESPenabled and not soloESPPlayers[plr.Name] then
                 box.Visible = false
@@ -273,15 +270,11 @@ local function makeESP(plr)
             local fSc, fVis = cam:WorldToViewportPoint(feetPos)
 
             if not hVis or not fVis or hSc.Z < 0 or fSc.Z < 0 then
-                failCount = failCount + 1
-                if failCount > MAX_FAILS then
-                    box.Visible = false
-                    hpBarBg.Visible = false
-                end
+                box.Visible = false
+                hpBarBg.Visible = false
                 return
             end
             
-            failCount = 0
             box.Visible = true
             hpBarBg.Visible = true
 
