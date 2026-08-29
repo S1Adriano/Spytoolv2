@@ -48,6 +48,30 @@ local abuseMode = false
 local ABUSE_BG    = Color3.fromRGB(35, 12, 12)
 local ABUSE_PANEL = Color3.fromRGB(45, 15, 15)
 
+-- ========== ESP HELPERS ==========
+local function isFriend(plr)
+    if plr == lp then return false end
+    local success, result = pcall(function()
+        return lp:IsFriendsWith(plr.UserId)
+    end)
+    return success and result
+end
+
+local function isBacon(plr)
+    local char = plr.Character
+    if not char then return false end
+    local head = char:FindFirstChild("Head")
+    if not head then return false end
+    for _, child in pairs(head:GetChildren()) do
+        if child:IsA("Accessory") then
+            if child.Name:lower():find("bacon") or child.Name:lower():find("pal hair") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- ========== ESP ==========
 local function clearESP(plr)
     if espLoops[plr.Name] then
@@ -63,19 +87,48 @@ local function makeESP(plr)
     if not ESPenabled and not soloESPPlayers[plr.Name] then return end
     clearESP(plr)
     task.spawn(function()
-        local char = plr.Character or plr.CharacterAdded:Wait()
+        local char = plr.Character
+        if not char then
+            char = plr.CharacterAdded:Wait()
+        end
+        if not char then return end
         if not ESPenabled and not soloESPPlayers[plr.Name] then return end
-        local hum  = char:FindFirstChildOfClass("Humanoid")
-        if not hum then return end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then
+            local humWait = char:WaitForChild("Humanoid", 5)
+            if not humWait then return end
+            hum = humWait
+        end
+        if not ESPenabled and not soloESPPlayers[plr.Name] then return end
+
         local root = char:FindFirstChild("HumanoidRootPart")
             or char:FindFirstChild("Torso")
             or char:FindFirstChild("UpperTorso")
+        if not root then
+            task.wait(0.5)
+            root = char:FindFirstChild("HumanoidRootPart")
+                or char:FindFirstChild("Torso")
+                or char:FindFirstChild("UpperTorso")
+        end
         if not root then return end
+        if not ESPenabled and not soloESPPlayers[plr.Name] then return end
 
         local isLocal = (plr == lp)
-        -- Color celeste para otros jugadores, verde para local
-        local espColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(135, 206, 235)
-        local hpFillColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(135, 206, 235)
+        local isMyFriend = not isLocal and isFriend(plr)
+        
+        local espColor
+        local hpFillColor
+        if isLocal then
+            espColor = Color3.fromRGB(80, 230, 120)
+            hpFillColor = Color3.fromRGB(80, 230, 120)
+        elseif isMyFriend then
+            espColor = Color3.fromRGB(173, 216, 230)
+            hpFillColor = Color3.fromRGB(173, 216, 230)
+        else
+            espColor = Color3.new(1, 1, 1)
+            hpFillColor = Color3.fromRGB(80, 220, 80)
+        end
 
         local currentAlpha = espAlpha
 
@@ -156,39 +209,83 @@ local function makeESP(plr)
         hpFill.Parent           = hpBarBg
 
         local cam = workspace.CurrentCamera
+        if not cam then
+            workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
+            cam = workspace.CurrentCamera
+        end
+
+        local failCount = 0
+        local MAX_FAILS = 30
 
         local loop = RunService.RenderStepped:Connect(function()
             if not ESPenabled and not soloESPPlayers[plr.Name] then
-                sg.Enabled = false
+                box.Visible = false
+                hpBarBg.Visible = false
                 return
             end
             if not (sg and sg.Parent) then return end
-            if not (char and char.Parent and hum and hum.Parent and root and root.Parent) then
-                sg.Enabled = false
+            
+            local currentChar = plr.Character
+            if not currentChar or not currentChar.Parent then
+                box.Visible = false
+                hpBarBg.Visible = false
                 return
+            end
+            
+            local currentHum = currentChar:FindFirstChildOfClass("Humanoid")
+            if not currentHum or not currentHum.Parent or currentHum.Health <= 0 then
+                box.Visible = false
+                hpBarBg.Visible = false
+                return
+            end
+            
+            local currentRoot = currentChar:FindFirstChild("HumanoidRootPart")
+                or currentChar:FindFirstChild("Torso")
+                or currentChar:FindFirstChild("UpperTorso")
+            if not currentRoot or not currentRoot.Parent then
+                box.Visible = false
+                hpBarBg.Visible = false
+                return
+            end
+
+            if not cam or not cam.Parent then
+                cam = workspace.CurrentCamera
+                if not cam then
+                    box.Visible = false
+                    hpBarBg.Visible = false
+                    return
+                end
             end
 
             local camPos = cam.CFrame.Position
-            local distance = (camPos - root.Position).Magnitude
+            local distance = (camPos - currentRoot.Position).Magnitude
 
             if isLocal and distance < LOCAL_ESP_HIDE_DIST then
-                sg.Enabled = false
+                box.Visible = false
+                hpBarBg.Visible = false
                 return
             end
 
-            nameText.Visible = distance > 13
-
-            local headPos = root.Position + Vector3.new(0, 2.8, 0)
-            local feetPos = root.Position - Vector3.new(0, 3.2, 0)
+            local headPos = currentRoot.Position + Vector3.new(0, 2.8, 0)
+            local feetPos = currentRoot.Position - Vector3.new(0, 3.2, 0)
 
             local hSc, hVis = cam:WorldToViewportPoint(headPos)
-            local fSc       = cam:WorldToViewportPoint(feetPos)
+            local fSc, fVis = cam:WorldToViewportPoint(feetPos)
 
-            if not hVis or hSc.Z < 0 then
-                sg.Enabled = false
+            if not hVis or not fVis or hSc.Z < 0 or fSc.Z < 0 then
+                failCount = failCount + 1
+                if failCount > MAX_FAILS then
+                    box.Visible = false
+                    hpBarBg.Visible = false
+                end
                 return
             end
-            sg.Enabled = true
+            
+            failCount = 0
+            box.Visible = true
+            hpBarBg.Visible = true
+
+            nameText.Visible = distance > 13
 
             local screenH = math.max(math.abs(hSc.Y - fSc.Y), 10)
             local screenW = screenH * 0.55
@@ -210,13 +307,16 @@ local function makeESP(plr)
             hpText.Position = UDim2.new(1, -2, 1, -2)
             nameText.TextSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
 
-            local hp  = math.clamp(hum.Health, 0, hum.MaxHealth)
-            local mx  = math.max(hum.MaxHealth, 1)
+            local hp  = math.clamp(currentHum.Health, 0, currentHum.MaxHealth)
+            local mx  = math.max(currentHum.MaxHealth, 1)
             local pct = hp / mx
 
             hpFill.Size             = UDim2.new(1, 0, pct, 0)
             hpFill.Position         = UDim2.new(0, 0, 1 - pct, 0)
-            if not isLocal then
+            
+            if isLocal or isMyFriend then
+                hpFill.BackgroundColor3 = hpFillColor
+            else
                 hpFill.BackgroundColor3 = Color3.new(
                     math.clamp(2*(1-pct), 0, 1),
                     math.clamp(2*pct,     0, 1),
@@ -228,14 +328,27 @@ local function makeESP(plr)
 
         espLoops[plr.Name] = loop
 
-        plr.CharacterAdded:Connect(function(newChar)
+        local respawnConn
+        respawnConn = plr.CharacterAdded:Connect(function(newChar)
+            if respawnConn then respawnConn:Disconnect() end
             loop:Disconnect()
             espLoops[plr.Name] = nil
             if sg and sg.Parent then sg:Destroy() end
-            wait(0.5)
+            task.wait(0.3)
             if ESPenabled or soloESPPlayers[plr.Name] then
-                wait(0.5)
-                makeESP(plr)
+                task.wait(0.3)
+                if ESPenabled or soloESPPlayers[plr.Name] then
+                    makeESP(plr)
+                end
+            end
+        end)
+
+        plr.AncestryChanged:Connect(function()
+            if not plr.Parent then
+                if respawnConn then respawnConn:Disconnect() end
+                loop:Disconnect()
+                espLoops[plr.Name] = nil
+                if sg and sg.Parent then sg:Destroy() end
             end
         end)
     end)
@@ -260,10 +373,12 @@ local function enableESPAll()
     for _, plr in pairs(Players:GetPlayers()) do
         if not playerAddedConns[plr.Name] then
             playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
-                wait(0.5)
+                task.wait(0.3)
                 if ESPenabled then
-                    wait(0.5)
-                    makeESP(plr)
+                    task.wait(0.3)
+                    if ESPenabled then
+                        makeESP(plr)
+                    end
                 end
             end)
         end
@@ -1171,29 +1286,6 @@ local function doJerk()
         end)
     end)
     return ok
-end
-
--- ========== ESP HELPERS ==========
-local function isFriend(plr)
-    local success, result = pcall(function()
-        return lp:IsFriendsWith(plr.UserId)
-    end)
-    return success and result
-end
-
-local function isBacon(plr)
-    local char = plr.Character
-    if not char then return false end
-    local head = char:FindFirstChild("Head")
-    if not head then return false end
-    for _, child in pairs(head:GetChildren()) do
-        if child:IsA("Accessory") then
-            if child.Name:lower():find("bacon") or child.Name:lower():find("pal hair") then
-                return true
-            end
-        end
-    end
-    return false
 end
 
 -- ========== GUI ==========
@@ -2597,11 +2689,15 @@ UserInputService.InputBegan:Connect(function(input, gp)
                     setPreviewHighlight(acPlayers[acSelectedIdx])
                 end
             elseif input.KeyCode == Enum.KeyCode.Tab then
+                acSelectedIdx = acSelectedIdx + 1
+                if acSelectedIdx > #acItems then
+                    acSelectedIdx = 1
+                end
+                updateACSelection()
                 if acSelectedIdx >= 1 and acSelectedIdx <= #acPlayers then
                     local plr = acPlayers[acSelectedIdx]
                     cmdBar.Text = acCurrentCmd .. " " .. plr.Name
-                    clearAC()
-                    clearPreviewHighlight()
+                    setPreviewHighlight(plr)
                 end
             elseif input.KeyCode == Enum.KeyCode.Escape then
                 clearAC()
@@ -2615,10 +2711,12 @@ Players.PlayerAdded:Connect(function(plr)
     if ESPenabled then
         makeESP(plr)
         playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
-            wait(0.5)
+            task.wait(0.3)
             if ESPenabled then
-                wait(0.5)
-                makeESP(plr)
+                task.wait(0.3)
+                if ESPenabled then
+                    makeESP(plr)
+                end
             end
         end)
     end
