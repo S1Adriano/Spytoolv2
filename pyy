@@ -73,8 +73,9 @@ local function makeESP(plr)
         if not root then return end
 
         local isLocal = (plr == lp)
-        local espColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.new(1,1,1)
-        local hpFillColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(80,220,80)
+        -- Color celeste para otros jugadores, verde para local
+        local espColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(135, 206, 235)
+        local hpFillColor = isLocal and Color3.fromRGB(80, 230, 120) or Color3.fromRGB(135, 206, 235)
 
         local currentAlpha = espAlpha
 
@@ -227,12 +228,13 @@ local function makeESP(plr)
 
         espLoops[plr.Name] = loop
 
-        plr.CharacterAdded:Connect(function()
+        plr.CharacterAdded:Connect(function(newChar)
             loop:Disconnect()
             espLoops[plr.Name] = nil
             if sg and sg.Parent then sg:Destroy() end
-            wait(1)
+            wait(0.5)
             if ESPenabled or soloESPPlayers[plr.Name] then
+                wait(0.5)
                 makeESP(plr)
             end
         end)
@@ -258,8 +260,11 @@ local function enableESPAll()
     for _, plr in pairs(Players:GetPlayers()) do
         if not playerAddedConns[plr.Name] then
             playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
-                wait(1)
-                if ESPenabled then makeESP(plr) end
+                wait(0.5)
+                if ESPenabled then
+                    wait(0.5)
+                    makeESP(plr)
+                end
             end)
         end
     end
@@ -1026,6 +1031,171 @@ local function setFlySpeed(speed)
     flyState.flySpeed = speed
 end
 
+-- ========== ANTILAG ==========
+local antilagActive = false
+local antilagConn = nil
+
+local function doAntilag()
+    if antilagActive then return end
+    antilagActive = true
+    
+    pcall(function()
+        local Terrain = workspace:FindFirstChildWhichIsA("Terrain")
+        if Terrain then
+            Terrain.WaterWaveSize = 0
+            Terrain.WaterWaveSpeed = 0
+            Terrain.WaterReflectance = 0
+            Terrain.WaterTransparency = 1
+        end
+        
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        Lighting.FogStart = 9e9
+        settings().Rendering.QualityLevel = 1
+        
+        for _, v in pairs(game:GetDescendants()) do
+            if v:IsA("BasePart") then
+                pcall(function()
+                    v.CastShadow = false
+                    v.Material = "Plastic"
+                    v.Reflectance = 0
+                    v.BackSurface = "SmoothNoOutlines"
+                    v.BottomSurface = "SmoothNoOutlines"
+                    v.FrontSurface = "SmoothNoOutlines"
+                    v.LeftSurface = "SmoothNoOutlines"
+                    v.RightSurface = "SmoothNoOutlines"
+                    v.TopSurface = "SmoothNoOutlines"
+                end)
+            elseif v:IsA("Decal") then
+                pcall(function()
+                    v.Transparency = 1
+                    v.Texture = ""
+                end)
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                pcall(function()
+                    v.Lifetime = NumberRange.new(0)
+                end)
+            end
+        end
+        
+        for _, v in pairs(Lighting:GetDescendants()) do
+            if v:IsA("PostEffect") then
+                pcall(function()
+                    v.Enabled = false
+                end)
+            end
+        end
+        
+        antilagConn = workspace.DescendantAdded:Connect(function(child)
+            task.spawn(function()
+                if child:IsA("ForceField") or child:IsA("Sparkles") or child:IsA("Smoke") or child:IsA("Fire") or child:IsA("Beam") then
+                    RunService.Heartbeat:Wait()
+                    pcall(function() child:Destroy() end)
+                elseif child:IsA("BasePart") then
+                    pcall(function()
+                        child.CastShadow = false
+                    end)
+                end
+            end)
+        end)
+    end)
+end
+
+-- ========== RSPY (Cobalt) ==========
+local function doRspy()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet("https://gitlab.com/upio/cobalt/-/releases/permalink/latest/downloads/Cobalt.luau"))()
+    end)
+    return ok
+end
+
+-- ========== SIMPLESPY ==========
+local function doSimpleSpy()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/SimpleSpyV3/main.lua"))()
+    end)
+    return ok
+end
+
+-- ========== JERK ==========
+local function doJerk()
+    local ok, err = pcall(function()
+        local char = lp.Character
+        if not char then return end
+        local humanoid = char:FindFirstChildWhichIsA("Humanoid")
+        local backpack = lp:FindFirstChildWhichIsA("Backpack")
+        if not humanoid or not backpack then return end
+        
+        local tool = Instance.new("Tool")
+        tool.Name = "Jerk Off"
+        tool.ToolTip = "Jerk tool"
+        tool.RequiresHandle = false
+        tool.Parent = backpack
+        
+        local jorkin = false
+        local track = nil
+        
+        local function stopTomfoolery()
+            jorkin = false
+            if track then
+                track:Stop()
+                track = nil
+            end
+        end
+        
+        tool.Equipped:Connect(function() jorkin = true end)
+        tool.Unequipped:Connect(stopTomfoolery)
+        humanoid.Died:Connect(stopTomfoolery)
+        
+        task.spawn(function()
+            while task.wait() do
+                if not jorkin then continue end
+                
+                local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15
+                if not track then
+                    local anim = Instance.new("Animation")
+                    anim.AnimationId = not isR15 and "rbxassetid://72042024" or "rbxassetid://698251653"
+                    track = humanoid:LoadAnimation(anim)
+                end
+                
+                track:Play()
+                track:AdjustSpeed(isR15 and 0.7 or 0.65)
+                track.TimePosition = 0.6
+                task.wait(0.1)
+                while track and track.TimePosition < (not isR15 and 0.65 or 0.7) do task.wait(0.1) end
+                if track then
+                    track:Stop()
+                    track = nil
+                end
+            end
+        end)
+    end)
+    return ok
+end
+
+-- ========== ESP HELPERS ==========
+local function isFriend(plr)
+    local success, result = pcall(function()
+        return lp:IsFriendsWith(plr.UserId)
+    end)
+    return success and result
+end
+
+local function isBacon(plr)
+    local char = plr.Character
+    if not char then return false end
+    local head = char:FindFirstChild("Head")
+    if not head then return false end
+    for _, child in pairs(head:GetChildren()) do
+        if child:IsA("Accessory") then
+            if child.Name:lower():find("bacon") or child.Name:lower():find("pal hair") then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- ========== GUI ==========
 local C_BG      = Color3.fromRGB(18, 18, 20)
 local C_PANEL   = Color3.fromRGB(26, 26, 29)
@@ -1721,6 +1891,7 @@ infoList.Parent = infoScroll
 
 local COMMAND_INFO = {
     {"esp [player]",       "Toggle ESP on player (or all)"},
+    {"esp all/others/friends/bacons", "ESP to groups"},
     {"unesp [player]",     "Remove ESP from player"},
     {"toggleesp [key]",    "Bind key to toggle ESP"},
     {"togglefc [key]",     "Bind key to toggle freecam"},
@@ -1739,6 +1910,7 @@ local COMMAND_INFO = {
     {"rejoin / rj",        "Rejoin server"},
     {"espt / esptransparency n", "Set ESP transparency"},
     {"copyname [player]",  "Copy player name to clipboard"},
+    {"antilag / boostfps / lowgraphics", "Reduce graphics for FPS"},
     {"abuse",              "Enable abuse mode"},
     {"unabuse",            "Disable abuse mode"},
 }
@@ -1748,6 +1920,9 @@ local ABUSE_COMMANDS = {
     {"fling [player]",     "Fling a player"},
     {"goto [player]",      "Teleport to a player"},
     {"aimbot",             "Load aimbot script"},
+    {"rspy / remotespy",   "Load Cobalt remote spy"},
+    {"simplespy",          "Load SimpleSpy V3"},
+    {"jerk",               "Load jerk tool"},
     {"fly / unfly / nofly","Toggle fly + noclip"},
     {"togglefly [key]",    "Bind key to toggle fly"},
     {"untogglefly",        "Remove fly toggle key"},
@@ -1932,13 +2107,17 @@ end
 
 local cmdHints = {
     {p="^esp%s+(%S+)", h=function(m)
+        if m == "all" then return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end
+        if m == "others" then return "Enable ESP for others (not you)" end
+        if m == "friends" then return "Enable ESP for friends only" end
+        if m == "bacons" or m == "bacon" then return "Enable ESP for bacons only" end
         local pl = findPlayer(m)
         if pl then
             local has = PARENT:FindFirstChild(pl.Name.."_SPY_ESP") ~= nil
             local n = pl.DisplayName ~= pl.Name and (pl.Name.." ("..pl.DisplayName..")") or pl.Name
             return has and "Remove ESP — "..n or "Add ESP — "..n
         end
-        return "esp [player]"
+        return "esp [player/all/others/friends/bacons]"
     end},
     {p="^esp$",             h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
     {p="^unesp%s+(%S+)",   h=function(m) local pl=findPlayer(m) return pl and "Remove ESP — "..pl.Name or "unesp [player]" end},
@@ -2005,6 +2184,9 @@ local cmdHints = {
         if pl then return "Copy name: "..pl.Name end
         return "copyname [player]"
     end},
+    {p="^antilag$",       h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
+    {p="^boostfps$",      h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
+    {p="^lowgraphics$",   h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
     {p="^abuse$",         h=function() return abuseMode and "Abuse mode already ON" or "Enable abuse mode" end},
     {p="^unabuse$",       h=function() return abuseMode and "Disable abuse mode" or "Abuse mode already OFF" end},
     {p="^soakill%s+(%S+)", h=function(m)
@@ -2028,6 +2210,22 @@ local cmdHints = {
     {p="^aimbot$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load aimbot script"
+    end},
+    {p="^rspy$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load Cobalt remote spy"
+    end},
+    {p="^remotespy$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load Cobalt remote spy"
+    end},
+    {p="^simplespy$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load SimpleSpy V3"
+    end},
+    {p="^jerk$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load jerk tool"
     end},
     {p="^fly$", h=function()
         if not abuseMode then return "Requires abuse mode" end
@@ -2075,9 +2273,38 @@ local function execCmd(raw)
 
     if cmd == "esp" then
         if arg1 then
-            local t = findPlayer(arg1)
-            if t then
-                if soloESPPlayers[t.Name] then clearESPSolo(t) else makeESPSolo(t) end
+            if arg1 == "all" then
+                if ESPenabled then disableESPAll(); updateBtn("esp", false)
+                else enableESPAll(); updateBtn("esp", true) end
+            elseif arg1 == "others" then
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= lp then
+                        if not soloESPPlayers[plr.Name] then
+                            makeESPSolo(plr)
+                        end
+                    end
+                end
+            elseif arg1 == "friends" then
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= lp and isFriend(plr) then
+                        if not soloESPPlayers[plr.Name] then
+                            makeESPSolo(plr)
+                        end
+                    end
+                end
+            elseif arg1 == "bacons" or arg1 == "bacon" then
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= lp and isBacon(plr) then
+                        if not soloESPPlayers[plr.Name] then
+                            makeESPSolo(plr)
+                        end
+                    end
+                end
+            else
+                local t = findPlayer(arg1)
+                if t then
+                    if soloESPPlayers[t.Name] then clearESPSolo(t) else makeESPSolo(t) end
+                end
             end
         else
             if ESPenabled then disableESPAll(); updateBtn("esp", false)
@@ -2139,6 +2366,8 @@ local function execCmd(raw)
             local t = findPlayer(arg1)
             if t then doCopyName(t) end
         end
+    elseif cmd == "antilag" or cmd == "boostfps" or cmd == "lowgraphics" then
+        doAntilag()
     elseif cmd == "abuse" then
         setAbuseMode(true)
     elseif cmd == "unabuse" then
@@ -2164,6 +2393,15 @@ local function execCmd(raw)
     elseif cmd == "aimbot" then
         if not abuseMode then return end
         doAimbot()
+    elseif cmd == "rspy" or cmd == "remotespy" then
+        if not abuseMode then return end
+        doRspy()
+    elseif cmd == "simplespy" then
+        if not abuseMode then return end
+        doSimpleSpy()
+    elseif cmd == "jerk" then
+        if not abuseMode then return end
+        doJerk()
     elseif cmd == "fly" then
         if not abuseMode then return end
         if flyState.flying then
@@ -2377,8 +2615,11 @@ Players.PlayerAdded:Connect(function(plr)
     if ESPenabled then
         makeESP(plr)
         playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
-            wait(1)
-            if ESPenabled then makeESP(plr) end
+            wait(0.5)
+            if ESPenabled then
+                wait(0.5)
+                makeESP(plr)
+            end
         end)
     end
 end)
