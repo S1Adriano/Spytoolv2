@@ -31,21 +31,19 @@ local ESPenabled = false
 local espLoops = {}
 local soloESPPlayers = {}
 local playerAddedConns = {}
-
 local espAlpha = 0
 local LOCAL_ESP_HIDE_DIST = 15
 
 local toggleESPKey = nil
 local toggleESPConn = nil
-
 local toggleFCKey = nil
 local toggleFCConn = nil
-
 local toggleFlyKey = nil
 local toggleFlyConn = nil
+local toggleAuraKey = nil
+local toggleAuraConn = nil
 
 local abuseMode = false
-
 local ABUSE_BG    = Color3.fromRGB(35, 12, 12)
 local ABUSE_PANEL = Color3.fromRGB(45, 15, 15)
 
@@ -87,9 +85,7 @@ local function makeESP(plr)
     clearESP(plr)
     task.spawn(function()
         local char = plr.Character
-        if not char then
-            char = plr.CharacterAdded:Wait()
-        end
+        if not char then char = plr.CharacterAdded:Wait() end
         if not char then return end
         if not ESPenabled and not soloESPPlayers[plr.Name] then return end
 
@@ -116,8 +112,7 @@ local function makeESP(plr)
         local isLocal = (plr == lp)
         local isMyFriend = not isLocal and isFriend(plr)
         
-        local espColor
-        local hpFillColor
+        local espColor, hpFillColor
         if isLocal then
             espColor = Color3.fromRGB(80, 230, 120)
             hpFillColor = Color3.fromRGB(80, 230, 120)
@@ -132,17 +127,17 @@ local function makeESP(plr)
         local currentAlpha = espAlpha
 
         local sg = Instance.new("ScreenGui")
-        sg.Name           = plr.Name .. "_SPY_ESP"
-        sg.ResetOnSpawn   = false
+        sg.Name = plr.Name .. "_SPY_ESP"
+        sg.ResetOnSpawn = false
         sg.IgnoreGuiInset = true
-        sg.DisplayOrder   = 999
-        sg.Parent         = PARENT
+        sg.DisplayOrder = 999
+        sg.Parent = PARENT
 
         local box = Instance.new("Frame")
         box.BackgroundTransparency = 1
-        box.BorderSizePixel        = 0
-        box.ZIndex                 = 2
-        box.Parent                 = sg
+        box.BorderSizePixel = 0
+        box.ZIndex = 2
+        box.Parent = sg
 
         local thick = 1
         local t = Instance.new("Frame")
@@ -163,22 +158,22 @@ local function makeESP(plr)
 
         local hpText = Instance.new("TextLabel")
         hpText.BackgroundTransparency = 1
-        hpText.AnchorPoint            = Vector2.new(1,1)
-        hpText.Position               = UDim2.new(1,-2,1,-2)
-        hpText.Size                   = UDim2.new(0,40,0,14)
-        hpText.Font                   = Enum.Font.GothamBold
-        hpText.TextSize               = 10
-        hpText.TextColor3             = espColor
+        hpText.AnchorPoint = Vector2.new(1,1)
+        hpText.Position = UDim2.new(1,-2,1,-2)
+        hpText.Size = UDim2.new(0,40,0,14)
+        hpText.Font = Enum.Font.GothamBold
+        hpText.TextSize = 10
+        hpText.TextColor3 = espColor
         hpText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
-        hpText.TextStrokeColor3       = Color3.new(0,0,0)
-        hpText.TextXAlignment         = Enum.TextXAlignment.Right
-        hpText.ZIndex                 = 4
-        hpText.Text                   = "100%"
-        hpText.Parent                 = box
+        hpText.TextStrokeColor3 = Color3.new(0,0,0)
+        hpText.TextXAlignment = Enum.TextXAlignment.Right
+        hpText.ZIndex = 4
+        hpText.Text = "100%"
+        hpText.Parent = box
 
         local nameText = Instance.new("TextLabel")
         nameText.BackgroundTransparency = 1
-        nameText.AnchorPoint            = Vector2.new(0.5, 1)
+        nameText.AnchorPoint = Vector2.new(0.5, 1)
         nameText.Position = UDim2.new(0.5, 0, 0, -2)
         nameText.Size = UDim2.new(1, 0, 0, 14)
         nameText.Font = Enum.Font.GothamBold
@@ -192,20 +187,20 @@ local function makeESP(plr)
         nameText.Parent = box
 
         local hpBarBg = Instance.new("Frame")
-        hpBarBg.BackgroundColor3       = Color3.fromRGB(20,20,20)
+        hpBarBg.BackgroundColor3 = Color3.fromRGB(20,20,20)
         hpBarBg.BackgroundTransparency = math.min(0.15 + currentAlpha * 0.85, 1)
-        hpBarBg.BorderSizePixel        = 0
-        hpBarBg.ZIndex                 = 2
-        hpBarBg.Parent                 = sg
+        hpBarBg.BorderSizePixel = 0
+        hpBarBg.ZIndex = 2
+        hpBarBg.Parent = sg
 
         local hpFill = Instance.new("Frame")
         hpFill.BackgroundColor3 = hpFillColor
-        hpFill.BorderSizePixel  = 0
-        hpFill.AnchorPoint      = Vector2.new(0,0)
-        hpFill.Position         = UDim2.new(0,0,0,0)
-        hpFill.Size             = UDim2.new(1,0,1,0)
-        hpFill.ZIndex           = 3
-        hpFill.Parent           = hpBarBg
+        hpFill.BorderSizePixel = 0
+        hpFill.AnchorPoint = Vector2.new(0,0)
+        hpFill.Position = UDim2.new(0,0,0,0)
+        hpFill.Size = UDim2.new(1,0,1,0)
+        hpFill.ZIndex = 3
+        hpFill.Parent = hpBarBg
 
         local cam = workspace.CurrentCamera
         if not cam then
@@ -223,15 +218,13 @@ local function makeESP(plr)
             
             local currentChar = plr.Character
             if not currentChar or not currentChar.Parent then
-                box.Visible = false
-                hpBarBg.Visible = false
+                box.Visible = false; hpBarBg.Visible = false
                 return
             end
             
             local currentHum = currentChar:FindFirstChildOfClass("Humanoid")
             if not currentHum or not currentHum.Parent or currentHum.Health <= 0 then
-                box.Visible = false
-                hpBarBg.Visible = false
+                box.Visible = false; hpBarBg.Visible = false
                 return
             end
             
@@ -239,16 +232,14 @@ local function makeESP(plr)
                 or currentChar:FindFirstChild("Torso")
                 or currentChar:FindFirstChild("UpperTorso")
             if not currentRoot or not currentRoot.Parent then
-                box.Visible = false
-                hpBarBg.Visible = false
+                box.Visible = false; hpBarBg.Visible = false
                 return
             end
 
             if not cam or not cam.Parent then
                 cam = workspace.CurrentCamera
                 if not cam then
-                    box.Visible = false
-                    hpBarBg.Visible = false
+                    box.Visible = false; hpBarBg.Visible = false
                     return
                 end
             end
@@ -257,8 +248,7 @@ local function makeESP(plr)
             local distance = (camPos - currentRoot.Position).Magnitude
 
             if isLocal and distance < LOCAL_ESP_HIDE_DIST then
-                box.Visible = false
-                hpBarBg.Visible = false
+                box.Visible = false; hpBarBg.Visible = false
                 return
             end
 
@@ -269,8 +259,7 @@ local function makeESP(plr)
             local fSc, fVis = cam:WorldToViewportPoint(feetPos)
 
             if not hVis or not fVis or hSc.Z < 0 or fSc.Z < 0 then
-                box.Visible = false
-                hpBarBg.Visible = false
+                box.Visible = false; hpBarBg.Visible = false
                 return
             end
             
@@ -281,17 +270,16 @@ local function makeESP(plr)
 
             local screenH = math.max(math.abs(hSc.Y - fSc.Y), 10)
             local screenW = screenH * 0.55
-            local cx      = hSc.X
-            local topY    = math.min(hSc.Y, fSc.Y)
-            local leftX   = cx - screenW * 0.5
-            local rightX  = cx + screenW * 0.5
-            local barW    = math.max(2, math.floor(screenW * 0.08))
+            local cx = hSc.X
+            local topY = math.min(hSc.Y, fSc.Y)
+            local leftX = cx - screenW * 0.5
+            local rightX = cx + screenW * 0.5
+            local barW = math.max(2, math.floor(screenW * 0.08))
 
-            box.Position     = UDim2.new(0, leftX,     0, topY)
-            box.Size         = UDim2.new(0, screenW,    0, screenH)
-
+            box.Position = UDim2.new(0, leftX, 0, topY)
+            box.Size = UDim2.new(0, screenW, 0, screenH)
             hpBarBg.Position = UDim2.new(0, rightX + 2, 0, topY)
-            hpBarBg.Size     = UDim2.new(0, barW,        0, screenH)
+            hpBarBg.Size = UDim2.new(0, barW, 0, screenH)
 
             local hpSize = math.clamp(math.floor(screenH * 0.1), 6, 14)
             hpText.TextSize = hpSize
@@ -299,20 +287,19 @@ local function makeESP(plr)
             hpText.Position = UDim2.new(1, -2, 1, -2)
             nameText.TextSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
 
-            local hp  = math.clamp(currentHum.Health, 0, currentHum.MaxHealth)
-            local mx  = math.max(currentHum.MaxHealth, 1)
+            local hp = math.clamp(currentHum.Health, 0, currentHum.MaxHealth)
+            local mx = math.max(currentHum.MaxHealth, 1)
             local pct = hp / mx
 
-            hpFill.Size             = UDim2.new(1, 0, pct, 0)
-            hpFill.Position         = UDim2.new(0, 0, 1 - pct, 0)
+            hpFill.Size = UDim2.new(1, 0, pct, 0)
+            hpFill.Position = UDim2.new(0, 0, 1 - pct, 0)
             
             if isLocal or isMyFriend then
                 hpFill.BackgroundColor3 = hpFillColor
             else
                 hpFill.BackgroundColor3 = Color3.new(
                     math.clamp(2*(1-pct), 0, 1),
-                    math.clamp(2*pct,     0, 1),
-                    0
+                    math.clamp(2*pct, 0, 1), 0
                 )
             end
             hpText.Text = math.floor(pct*100) .. "%"
@@ -359,18 +346,14 @@ end
 
 local function enableESPAll()
     ESPenabled = true
-    for _, plr in pairs(Players:GetPlayers()) do
-        makeESP(plr)
-    end
+    for _, plr in pairs(Players:GetPlayers()) do makeESP(plr) end
     for _, plr in pairs(Players:GetPlayers()) do
         if not playerAddedConns[plr.Name] then
             playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
                 task.wait(0.3)
                 if ESPenabled then
                     task.wait(0.3)
-                    if ESPenabled then
-                        makeESP(plr)
-                    end
+                    if ESPenabled then makeESP(plr) end
                 end
             end)
         end
@@ -380,9 +363,7 @@ end
 local function disableESPAll()
     ESPenabled = false
     for _, plr in pairs(Players:GetPlayers()) do
-        if not soloESPPlayers[plr.Name] then
-            clearESP(plr)
-        end
+        if not soloESPPlayers[plr.Name] then clearESP(plr) end
     end
     for name, conn in pairs(playerAddedConns) do
         conn:Disconnect()
@@ -454,9 +435,9 @@ do
     local mouse = {Delta = Vector2.new()}
     local NAV_SPEED = Vector3.new(1,1,1)
     local PAN_SPEED = Vector2.new(1,1) * (math.pi/64)
-    local NAV_ADJ   = 0.75
+    local NAV_ADJ = 0.75
     local NAV_SHIFT = 0.25
-    local navSpeed  = 1
+    local navSpeed = 1
 
     function FCInput.Vel(dt)
         navSpeed = math.clamp(navSpeed + dt*(keyboard.Up-keyboard.Down)*NAV_ADJ, 0.01, 4)
@@ -566,10 +547,10 @@ do
 end
 
 local function GetFocusDistance(cf)
-    local znear   = 0.1
-    local vp      = Camera.ViewportSize
-    local projy   = 2 * math.tan(math.rad(cameraFov/2))
-    local projx   = vp.X / vp.Y * projy
+    local znear = 0.1
+    local vp = Camera.ViewportSize
+    local projy = 2 * math.tan(math.rad(cameraFov/2))
+    local projx = vp.X / vp.Y * projy
     local minDist = 512
     for x = 0,1,0.5 do for y = 0,1,0.5 do
         local offset = cf.RightVector*(x-.5)*projx - cf.UpVector*(y-.5)*projy + cf.LookVector
@@ -1290,6 +1271,15 @@ local function getHitEvent()
     return ok and hitEvent or nil
 end
 
+local function getSwingEvent()
+    local ok, swingEvent = pcall(function()
+        return ReplicatedStorage:FindFirstChild("MeleeStorage")
+            and ReplicatedStorage.MeleeStorage:FindFirstChild("Events")
+            and ReplicatedStorage.MeleeStorage.Events:FindFirstChild("Swing")
+    end)
+    return ok and swingEvent or nil
+end
+
 local function getNPCCustomFolder()
     local ok, folder = pcall(function()
         return workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("Custom")
@@ -1336,6 +1326,10 @@ local function startAura()
                     local head = npc:FindFirstChild("Head")
                     if head and head:IsA("BasePart") then
                         if (playerHead.Position - head.Position).Magnitude <= auraState.reach then
+                            local swingEv = getSwingEvent()
+                            if swingEv then
+                                pcall(function() swingEv:InvokeServer() end)
+                            end
                             ev:FireServer(head, head.Position)
                         end
                     end
@@ -1365,6 +1359,33 @@ local function setAuraReach(n)
     auraState.reach = math.clamp(tonumber(n) or 21, 1, 30)
 end
 
+local function setToggleAuraKey(keyName)
+    if toggleAuraConn then toggleAuraConn:Disconnect(); toggleAuraConn = nil end
+    if not keyName or keyName == "" then
+        toggleAuraKey = nil
+        return
+    end
+    local specialKeys = {[";"]="Semicolon",["."]="Period",[","]="Comma",["/"]="Slash",["\\"]="BackSlash"}
+    local keyCode
+    if specialKeys[keyName] then
+        keyCode = Enum.KeyCode[specialKeys[keyName]]
+    elseif #keyName == 1 then
+        keyCode = Enum.KeyCode[keyName:upper()]
+    else
+        local ok, kc = pcall(function() return Enum.KeyCode[keyName] end)
+        if ok and kc then keyCode = kc end
+    end
+    if not keyCode then return end
+    toggleAuraKey = #keyName == 1 and keyName:lower() or keyName
+    toggleAuraConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if cmdBar:IsFocused() then return end
+        if input.KeyCode == keyCode then
+            toggleAura()
+        end
+    end)
+end
+
 local C_BG      = Color3.fromRGB(18, 18, 20)
 local C_PANEL   = Color3.fromRGB(26, 26, 29)
 local C_BORDER  = Color3.fromRGB(38, 38, 42)
@@ -1377,6 +1398,7 @@ local C_SUBTEXT = Color3.fromRGB(120, 120, 130)
 local C_HINT    = Color3.fromRGB(100, 150, 220)
 local C_WARN    = Color3.fromRGB(200, 160, 60)
 local C_ABUSE   = Color3.fromRGB(255, 80, 80)
+local C_SUCCESS = Color3.fromRGB(80, 220, 120)
 
 local function makeLine(parent, pos, size)
     local f = Instance.new("Frame")
@@ -1910,6 +1932,42 @@ end)
 
 buttons["rejoin"].MouseButton1Click:Connect(function() doRejoin() end)
 
+-- ========== EXECUTED LABEL ==========
+local execLabel = Instance.new("TextLabel")
+execLabel.BackgroundTransparency = 1
+execLabel.Position = UDim2.new(0, 8, 0, 202)
+execLabel.Size = UDim2.new(1, -16, 0, 16)
+execLabel.Font = Enum.Font.SourceSansItalic
+execLabel.TextSize = 12
+execLabel.Text = ""
+execLabel.TextColor3 = C_SUCCESS
+execLabel.TextXAlignment = Enum.TextXAlignment.Center
+execLabel.TextTruncate = Enum.TextTruncate.AtEnd
+execLabel.Visible = false
+execLabel.ZIndex = 10
+execLabel.Parent = gui
+
+local execLabelTween = nil
+local function showExecuted()
+    if execLabelTween then
+        execLabelTween:Cancel()
+    end
+    
+    execLabel.Text = "Executed..."
+    execLabel.TextTransparency = 0
+    execLabel.Visible = true
+    
+    task.delay(1.5, function()
+        execLabelTween = TweenService:Create(execLabel, TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            TextTransparency = 1
+        })
+        execLabelTween:Play()
+        execLabelTween.Completed:Connect(function()
+            execLabel.Visible = false
+        end)
+    end)
+end
+
 local page2Frame = Instance.new("Frame")
 page2Frame.BackgroundTransparency = 1
 page2Frame.Position               = UDim2.new(0,8,0,80)
@@ -2090,6 +2148,8 @@ local ABUSE_COMMANDS = {
     {"aura / toggleaura",  "Auto-melee NPCs in range"},
     {"noaura / unaura",    "Stop aura"},
     {"aurareach n",        "Set aura range (1-30, default 21)"},
+    {"toggleaurakey [key]","Bind key to toggle aura"},
+    {"untoggleaura",       "Remove aura toggle key"},
     {"rspy / remotespy",   "Load Cobalt remote spy"},
     {"simplespy",          "Load SimpleSpy V3"},
     {"jerk",               "Load jerk tool"},
@@ -2315,6 +2375,13 @@ local cmdHints = {
     end},
     {p="^untoggleesp$", h=function()
         return toggleESPKey and "Remove ESP toggle key (currently: "..toggleESPKey:upper()..")" or "No ESP toggle key set"
+    end},
+    {p="^toggleaurakey%s+(%S+)",h=function(m) return "Bind Aura toggle to key: " .. m:upper() end},
+    {p="^toggleaurakey$", h=function()
+        return toggleAuraKey and "Remove aura toggle key (currently: "..toggleAuraKey:upper()..")" or "toggleaurakey [key] — bind a toggle key"
+    end},
+    {p="^untoggleaura$", h=function()
+        return toggleAuraKey and "Remove aura toggle key (currently: "..toggleAuraKey:upper()..")" or "No aura toggle key set"
     end},
     {p="^esptransparency%s+(%S+)", h=function(m)
         local v = tonumber(m)
@@ -2559,6 +2626,10 @@ local function execCmd(raw)
         setToggleFCKey(nil)
     elseif cmd == "untoggleesp" then
         setToggleESPKey(nil)
+    elseif cmd == "toggleaurakey" then
+        if arg1 then setToggleAuraKey(arg1) else setToggleAuraKey(nil) end
+    elseif cmd == "untoggleaura" then
+        setToggleAuraKey(nil)
     elseif cmd == "esptransparency" or cmd == "espt" then
         local v = tonumber(arg1)
         if v then espAlpha = math.clamp(v, 0.01, 0.95); applyESPTransparency() end
@@ -2764,6 +2835,7 @@ cmdBar.FocusLost:Connect(function(enter)
             cmdText = cmdText:sub(#prefix + 1)
         end
         execCmd(cmdText)
+        showExecuted()
         hintBar.Visible = false
         clearAC()
         clearPreviewHighlight()
@@ -2853,9 +2925,7 @@ Players.PlayerAdded:Connect(function(plr)
             task.wait(0.3)
             if ESPenabled then
                 task.wait(0.3)
-                if ESPenabled then
-                    makeESP(plr)
-                end
+                if ESPenabled then makeESP(plr) end
             end
         end)
     end
