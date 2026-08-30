@@ -210,8 +210,7 @@ local function makeESP(plr)
 
         local loop = RunService.RenderStepped:Connect(function()
             if not ESPenabled and not soloESPPlayers[plr.Name] then
-                box.Visible = false
-                hpBarBg.Visible = false
+                box.Visible = false; hpBarBg.Visible = false
                 return
             end
             if not (sg and sg.Parent) then return end
@@ -265,7 +264,6 @@ local function makeESP(plr)
             
             box.Visible = true
             hpBarBg.Visible = true
-
             nameText.Visible = distance > 13
 
             local screenH = math.max(math.abs(hSc.Y - fSc.Y), 10)
@@ -1299,7 +1297,13 @@ local function startAura()
     auraState.active = true
     
     auraState.loopConn = RunService.RenderStepped:Connect(function()
-        if not auraState.active then return end
+        if not auraState.active then
+            if auraState.loopConn then
+                auraState.loopConn:Disconnect()
+                auraState.loopConn = nil
+            end
+            return
+        end
         
         local ev = getHitEvent()
         if not ev then
@@ -1935,7 +1939,7 @@ buttons["rejoin"].MouseButton1Click:Connect(function() doRejoin() end)
 -- ========== EXECUTED LABEL ==========
 local execLabel = Instance.new("TextLabel")
 execLabel.BackgroundTransparency = 1
-execLabel.Position = UDim2.new(0, 8, 0, 202)
+execLabel.Position = UDim2.new(0, 8, 0, 190)
 execLabel.Size = UDim2.new(1, -16, 0, 16)
 execLabel.Font = Enum.Font.SourceSansItalic
 execLabel.TextSize = 12
@@ -2348,39 +2352,39 @@ local cmdHints = {
         end
         return "esp [player/all/others/friends/bacons]"
     end},
-    {p="^esp$",             h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
+    {p="^esp%s*$",             h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
     {p="^unesp%s+(%S+)",   h=function(m) local pl=findPlayer(m) return pl and "Remove ESP — "..pl.Name or "unesp [player]" end},
-    {p="^unesp$",           h=function() return "Remove all ESP" end},
+    {p="^unesp%s*$",           h=function() return "Remove all ESP" end},
     {p="^toggleesp%s+(%S+)",h=function(m) return "Bind ESP toggle to key: " .. m:upper() end},
-    {p="^toggleesp$", h=function()
+    {p="^toggleesp%s*$", h=function()
         return toggleESPKey and "Remove toggle key (currently: "..toggleESPKey:upper()..")" or "toggleesp [key] — bind a toggle key"
     end},
     {p="^togglefc%s+(%S+)",h=function(m) return "Bind Freecam toggle to key: " .. m:upper() end},
-    {p="^togglefc$", h=function()
+    {p="^togglefc%s*$", h=function()
         return toggleFCKey and "Remove toggle key (currently: "..toggleFCKey:upper()..")" or "togglefc [key] — bind a toggle key"
     end},
     {p="^togglefreecam%s+(%S+)",h=function(m) return "Bind Freecam toggle to key: " .. m:upper() end},
-    {p="^togglefreecam$", h=function()
+    {p="^togglefreecam%s*$", h=function()
         return toggleFCKey and "Remove toggle key (currently: "..toggleFCKey:upper()..")" or "togglefreecam [key] — bind a toggle key"
     end},
     {p="^togglefly%s+(%S+)",h=function(m) return "Bind Fly toggle to key: " .. m:upper() end},
-    {p="^togglefly$", h=function()
+    {p="^togglefly%s*$", h=function()
         return toggleFlyKey and "Remove toggle key (currently: "..toggleFlyKey:upper()..")" or "togglefly [key] — bind a toggle key"
     end},
-    {p="^untogglefly$", h=function()
+    {p="^untogglefly%s*$", h=function()
         return toggleFlyKey and "Remove fly toggle key (currently: "..toggleFlyKey:upper()..")" or "No fly toggle key set"
     end},
-    {p="^untogglefc$", h=function()
+    {p="^untogglefc%s*$", h=function()
         return toggleFCKey and "Remove freecam toggle key (currently: "..toggleFCKey:upper()..")" or "No freecam toggle key set"
     end},
-    {p="^untoggleesp$", h=function()
+    {p="^untoggleesp%s*$", h=function()
         return toggleESPKey and "Remove ESP toggle key (currently: "..toggleESPKey:upper()..")" or "No ESP toggle key set"
     end},
     {p="^toggleaurakey%s+(%S+)",h=function(m) return "Bind Aura toggle to key: " .. m:upper() end},
-    {p="^toggleaurakey$", h=function()
+    {p="^toggleaurakey%s*$", h=function()
         return toggleAuraKey and "Remove aura toggle key (currently: "..toggleAuraKey:upper()..")" or "toggleaurakey [key] — bind a toggle key"
     end},
-    {p="^untoggleaura$", h=function()
+    {p="^untoggleaura%s*$", h=function()
         return toggleAuraKey and "Remove aura toggle key (currently: "..toggleAuraKey:upper()..")" or "No aura toggle key set"
     end},
     {p="^esptransparency%s+(%S+)", h=function(m)
@@ -2388,7 +2392,7 @@ local cmdHints = {
         if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
         return string.format("esptransparency [0.01–0.95]  (current: %.2f)", espAlpha)
     end},
-    {p="^esptransparency$", h=function()
+    {p="^esptransparency%s*$", h=function()
         return string.format("esptransparency [0.01–0.95]  (current: %.2f)", espAlpha)
     end},
     {p="^espt%s+(%S+)", h=function(m)
@@ -2396,7 +2400,7 @@ local cmdHints = {
         if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
         return string.format("espt [0.01–0.95]  (current: %.2f)", espAlpha)
     end},
-    {p="^espt$", h=function()
+    {p="^espt%s*$", h=function()
         return string.format("espt [0.01–0.95]  (current: %.2f)", espAlpha)
     end},
     {p="^view%s+(%S+)",   h=function(m)
@@ -2404,51 +2408,51 @@ local cmdHints = {
         if pl then return "Spectate "..pl.Name..(pl.DisplayName~=pl.Name and " ("..pl.DisplayName..")" or "") end
         return "view [player]"
     end},
-    {p="^view$", h=function() return "view [player] — spectate a player" end},
+    {p="^view%s*$", h=function() return "view [player] — spectate a player" end},
     {p="^spectate%s+(%S+)", h=function(m)
         local pl=findPlayer(m)
         if pl then return "Spectate "..pl.Name..(pl.DisplayName~=pl.Name and " ("..pl.DisplayName..")" or "") end
         return "spectate [player]"
     end},
-    {p="^spectate$", h=function() return "spectate [player] — spectate a player" end},
-    {p="^unview$",        h=function() return viewing and "Stop spectating "..viewing.Name or "Not spectating anyone" end},
-    {p="^unspectate$",    h=function() return viewing and "Stop spectating "..viewing.Name or "Not spectating anyone" end},
-    {p="^freecam$",       h=function() return fcRunning and "Close freecam" or "Open freecam" end},
-    {p="^fc$",            h=function() return fcRunning and "Close freecam" or "Open freecam" end},
-    {p="^unfreecam$",     h=function() return "Close freecam" end},
-    {p="^unfc$",          h=function() return "Close freecam" end},
+    {p="^spectate%s*$", h=function() return "spectate [player] — spectate a player" end},
+    {p="^unview%s*$",        h=function() return viewing and "Stop spectating "..viewing.Name or "Not spectating anyone" end},
+    {p="^unspectate%s*$",    h=function() return viewing and "Stop spectating "..viewing.Name or "Not spectating anyone" end},
+    {p="^freecam%s*$",       h=function() return fcRunning and "Close freecam" or "Open freecam" end},
+    {p="^fc%s*$",            h=function() return fcRunning and "Close freecam" or "Open freecam" end},
+    {p="^unfreecam%s*$",     h=function() return "Close freecam" end},
+    {p="^unfc%s*$",          h=function() return "Close freecam" end},
     {p="^fcspeed%s+(%S+)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
-    {p="^fcspeed$",h=function() return "fcspeed [number] — set freecam speed" end},
+    {p="^fcspeed%s*$",h=function() return "fcspeed [number] — set freecam speed" end},
     {p="^freecamspeed%s+(%S+)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
-    {p="^freecamspeed$",h=function() return "freecamspeed [number] — set freecam speed" end},
-    {p="^fixcam$",        h=function() return "Reset camera to default" end},
-    {p="^fb$",            h=function() return fbEnabled and "Disable fullbright" or "Enable fullbright" end},
-    {p="^fullbright$",    h=function() return fbEnabled and "Disable fullbright" or "Enable fullbright" end},
-    {p="^unfb$",          h=function() return "Disable fullbright" end},
-    {p="^nofullbright$",  h=function() return "Disable fullbright" end},
-    {p="^day$",           h=function() return "Set daytime (ClockTime = 14)" end},
-    {p="^night$",         h=function() return "Set nighttime (ClockTime = 0)" end},
-    {p="^nofog$",         h=function() return "Remove fog (FogEnd = 100000)" end},
-    {p="^rejoin$",        h=function() return "Rejoin current server" end},
-    {p="^rj$",            h=function() return "Rejoin current server" end},
+    {p="^freecamspeed%s*$",h=function() return "freecamspeed [number] — set freecam speed" end},
+    {p="^fixcam%s*$",        h=function() return "Reset camera to default" end},
+    {p="^fb%s*$",            h=function() return fbEnabled and "Disable fullbright" or "Enable fullbright" end},
+    {p="^fullbright%s*$",    h=function() return fbEnabled and "Disable fullbright" or "Enable fullbright" end},
+    {p="^unfb%s*$",          h=function() return "Disable fullbright" end},
+    {p="^nofullbright%s*$",  h=function() return "Disable fullbright" end},
+    {p="^day%s*$",           h=function() return "Set daytime (ClockTime = 14)" end},
+    {p="^night%s*$",         h=function() return "Set nighttime (ClockTime = 0)" end},
+    {p="^nofog%s*$",         h=function() return "Remove fog (FogEnd = 100000)" end},
+    {p="^rejoin%s*$",        h=function() return "Rejoin current server" end},
+    {p="^rj%s*$",            h=function() return "Rejoin current server" end},
     {p="^copyname%s+(%S+)", h=function(m)
         local pl = findPlayer(m)
         if pl then return "Copy name: "..pl.Name end
         return "copyname [player]"
     end},
-    {p="^copyname$", h=function() return "copyname [player] — copy player name to clipboard" end},
-    {p="^antilag$",       h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
-    {p="^boostfps$",      h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
-    {p="^lowgraphics$",   h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
-    {p="^abuse$",         h=function() return abuseMode and "Abuse mode already ON" or "Enable abuse mode" end},
-    {p="^unabuse$",       h=function() return abuseMode and "Disable abuse mode" or "Abuse mode already OFF" end},
+    {p="^copyname%s*$", h=function() return "copyname [player] — copy player name to clipboard" end},
+    {p="^antilag%s*$",       h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
+    {p="^boostfps%s*$",      h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
+    {p="^lowgraphics%s*$",   h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
+    {p="^abuse%s*$",         h=function() return abuseMode and "Abuse mode already ON" or "Enable abuse mode" end},
+    {p="^unabuse%s*$",       h=function() return abuseMode and "Disable abuse mode" or "Abuse mode already OFF" end},
     {p="^soakill%s+(%S+)", h=function(m)
         if not abuseMode then return "Requires abuse mode" end
         local pl = findPlayer(m)
         if pl then return "Kill "..pl.Name end
         return "soakill [player]"
     end},
-    {p="^soakill$", h=function()
+    {p="^soakill%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "soakill [player] — kill a player"
     end},
@@ -2458,7 +2462,7 @@ local cmdHints = {
         if pl then return "Fling "..pl.Name end
         return "fling [player]"
     end},
-    {p="^fling$", h=function()
+    {p="^fling%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "fling [player] — fling a player"
     end},
@@ -2468,31 +2472,31 @@ local cmdHints = {
         if pl then return "Teleport to "..pl.Name end
         return "goto [player]"
     end},
-    {p="^goto$", h=function()
+    {p="^goto%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "goto [player] — teleport to a player"
     end},
-    {p="^aimbot$", h=function()
+    {p="^aimbot%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load aimbot script"
     end},
-    {p="^ia$", h=function()
+    {p="^ia%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load Ninni Hub script"
     end},
-    {p="^aura$", h=function()
+    {p="^aura%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return auraState.active and "Stop aura" or "Start aura (range: "..auraState.reach..")"
     end},
-    {p="^toggleaura$", h=function()
+    {p="^toggleaura%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return auraState.active and "Stop aura" or "Start aura (range: "..auraState.reach..")"
     end},
-    {p="^noaura$", h=function()
+    {p="^noaura%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return auraState.active and "Stop aura" or "Aura is already OFF"
     end},
-    {p="^unaura$", h=function()
+    {p="^unaura%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return auraState.active and "Stop aura" or "Aura is already OFF"
     end},
@@ -2505,35 +2509,35 @@ local cmdHints = {
         end
         return string.format("aurareach [1-30]  (current: %d)", auraState.reach)
     end},
-    {p="^aurareach$", h=function()
+    {p="^aurareach%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return string.format("aurareach [1-30]  (current: %d, default: 21, max: 30)", auraState.reach)
     end},
-    {p="^rspy$", h=function()
+    {p="^rspy%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load Cobalt remote spy"
     end},
-    {p="^remotespy$", h=function()
+    {p="^remotespy%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load Cobalt remote spy"
     end},
-    {p="^simplespy$", h=function()
+    {p="^simplespy%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load SimpleSpy V3"
     end},
-    {p="^jerk$", h=function()
+    {p="^jerk%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load jerk tool"
     end},
-    {p="^fly$", h=function()
+    {p="^fly%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return flyState.flying and "Stop flying" or "Start flying"
     end},
-    {p="^unfly$", h=function()
+    {p="^unfly%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return flyState.flying and "Stop flying" or "Not flying"
     end},
-    {p="^nofly$", h=function()
+    {p="^nofly%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return flyState.flying and "Stop flying" or "Not flying"
     end},
@@ -2542,7 +2546,7 @@ local cmdHints = {
         if v then return string.format("Fly speed multiplier: %.2fx", v) end
         return string.format("flyspeed [number]  (current: %.2fx)", flyState.flySpeed)
     end},
-    {p="^flyspeed$",h=function()
+    {p="^flyspeed%s*$",h=function()
         return string.format("flyspeed [number]  (current: %.2fx, 1 = normal)", flyState.flySpeed)
     end},
     {p="^flyws%s+(%S+)",h=function(m)
@@ -2550,7 +2554,7 @@ local cmdHints = {
         if v then return string.format("Fly speed multiplier: %.2fx", v) end
         return string.format("flyws [number]  (current: %.2fx)", flyState.flySpeed)
     end},
-    {p="^flyws$",h=function()
+    {p="^flyws%s*$",h=function()
         return string.format("flyws [number]  (current: %.2fx, 1 = normal)", flyState.flySpeed)
     end},
 }
