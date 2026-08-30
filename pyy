@@ -8,6 +8,7 @@ local Lighting = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local lp = Players.LocalPlayer
 local prefix = ";"
@@ -48,7 +49,6 @@ local abuseMode = false
 local ABUSE_BG    = Color3.fromRGB(35, 12, 12)
 local ABUSE_PANEL = Color3.fromRGB(45, 15, 15)
 
--- ========== ESP HELPERS ==========
 local function isFriend(plr)
     if plr == lp then return false end
     local success, result = pcall(function()
@@ -72,7 +72,6 @@ local function isBacon(plr)
     return false
 end
 
--- ========== ESP ==========
 local function clearESP(plr)
     if espLoops[plr.Name] then
         espLoops[plr.Name]:Disconnect()
@@ -416,7 +415,6 @@ local function applyESPTransparency()
     end
 end
 
--- ========== FREECAM ==========
 local fcRunning = false
 local cameraPos = Vector3.new()
 local cameraRot = Vector2.new()
@@ -712,7 +710,6 @@ local function startFreecam(pos)
     enableFreecamClickThrough()
 end
 
--- ========== VIEW ==========
 local viewing = nil
 local _viewConns = {}
 
@@ -739,7 +736,6 @@ local function startView(plr)
     end))
 end
 
--- ========== FULLBRIGHT ==========
 local origLighting = {
     Brightness=Lighting.Brightness, ClockTime=Lighting.ClockTime,
     FogEnd=Lighting.FogEnd, GlobalShadows=Lighting.GlobalShadows,
@@ -777,7 +773,6 @@ local function findPlayer(query)
     end
 end
 
--- ========== SOAKILL ==========
 local function doSoaKill(target)
     local char = target.Character
     if not char then return false end
@@ -822,7 +817,6 @@ local function doSoaKill(target)
     return ok
 end
 
--- ========== GOTO ==========
 local function doGoto(target)
     local char = lp.Character
     if not char then return false end
@@ -886,7 +880,6 @@ local function doGoto(target)
     return ok
 end
 
--- ========== FLING ==========
 local function doFling(target)
     local char = lp.Character
     if not char then return false end
@@ -993,7 +986,6 @@ local function doFling(target)
     return ok
 end
 
--- ========== COPYNAME ==========
 local function doCopyName(target)
     local ok, err = pcall(function()
         if setclipboard then
@@ -1007,7 +999,6 @@ local function doCopyName(target)
     return ok
 end
 
--- ========== AIMBOT ==========
 local function doAimbot()
     local ok, err = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/S1Adriano/sadsad/refs/heads/main/xa"))()
@@ -1015,7 +1006,6 @@ local function doAimbot()
     return ok
 end
 
--- ========== IA (Ninni Hub) ==========
 local function doIA()
     local ok, err = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/S1Adriano/ninnitruco/refs/heads/main/ninnihub"))()
@@ -1023,7 +1013,6 @@ local function doIA()
     return ok
 end
 
--- ========== FLY + NOCLIP ==========
 local BASE_FLY_SPEED = 80
 local flyState = {
     flying = false,
@@ -1147,7 +1136,6 @@ local function setFlySpeed(speed)
     flyState.flySpeed = speed
 end
 
--- ========== ANTILAG ==========
 local antilagActive = false
 local antilagConn = nil
 
@@ -1217,7 +1205,6 @@ local function doAntilag()
     end)
 end
 
--- ========== RSPY (Cobalt) ==========
 local function doRspy()
     local ok, err = pcall(function()
         loadstring(game:HttpGet("https://gitlab.com/upio/cobalt/-/releases/permalink/latest/downloads/Cobalt.luau"))()
@@ -1225,7 +1212,6 @@ local function doRspy()
     return ok
 end
 
--- ========== SIMPLESPY ==========
 local function doSimpleSpy()
     local ok, err = pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/SimpleSpyV3/main.lua"))()
@@ -1233,7 +1219,6 @@ local function doSimpleSpy()
     return ok
 end
 
--- ========== JERK ==========
 local function doJerk()
     local ok, err = pcall(function()
         local char = lp.Character
@@ -1289,7 +1274,97 @@ local function doJerk()
     return ok
 end
 
--- ========== GUI ==========
+-- ========== AURA ==========
+local auraState = {
+    active = false,
+    reach = 21,
+    loopConn = nil
+}
+
+local function getHitEvent()
+    local ok, hitEvent = pcall(function()
+        return ReplicatedStorage:FindFirstChild("MeleeStorage")
+            and ReplicatedStorage.MeleeStorage:FindFirstChild("Events")
+            and ReplicatedStorage.MeleeStorage.Events:FindFirstChild("Hit")
+    end)
+    return ok and hitEvent or nil
+end
+
+local function getNPCCustomFolder()
+    local ok, folder = pcall(function()
+        return workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("Custom")
+    end)
+    return ok and folder or nil
+end
+
+local function startAura()
+    if auraState.active then return end
+    
+    local hitEvent = getHitEvent()
+    if not hitEvent then return end
+    
+    local npcFolder = getNPCCustomFolder()
+    if not npcFolder then return end
+    
+    auraState.active = true
+    
+    auraState.loopConn = RunService.RenderStepped:Connect(function()
+        if not auraState.active then return end
+        
+        local ev = getHitEvent()
+        if not ev then
+            stopAura()
+            return
+        end
+        
+        local folder = getNPCCustomFolder()
+        if not folder then
+            stopAura()
+            return
+        end
+        
+        local char = lp.Character
+        if not char then return end
+        
+        local playerHead = char:FindFirstChild("Head")
+        if not playerHead or not playerHead:IsA("BasePart") then return end
+        
+        for _, npc in pairs(folder:GetChildren()) do
+            pcall(function()
+                local humanoid = npc:FindFirstChildOfClass("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    local head = npc:FindFirstChild("Head")
+                    if head and head:IsA("BasePart") then
+                        if (playerHead.Position - head.Position).Magnitude <= auraState.reach then
+                            ev:FireServer(head, head.Position)
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+end
+
+local function stopAura()
+    auraState.active = false
+    if auraState.loopConn then
+        auraState.loopConn:Disconnect()
+        auraState.loopConn = nil
+    end
+end
+
+local function toggleAura()
+    if auraState.active then
+        stopAura()
+    else
+        startAura()
+    end
+end
+
+local function setAuraReach(n)
+    auraState.reach = math.clamp(tonumber(n) or 21, 1, 30)
+end
+
 local C_BG      = Color3.fromRGB(18, 18, 20)
 local C_PANEL   = Color3.fromRGB(26, 26, 29)
 local C_BORDER  = Color3.fromRGB(38, 38, 42)
@@ -1835,7 +1910,6 @@ end)
 
 buttons["rejoin"].MouseButton1Click:Connect(function() doRejoin() end)
 
--- ========== PAGE 2 ==========
 local page2Frame = Instance.new("Frame")
 page2Frame.BackgroundTransparency = 1
 page2Frame.Position               = UDim2.new(0,8,0,80)
@@ -1960,7 +2034,6 @@ espTransBox.FocusLost:Connect(function(enter)
     end
 end)
 
--- ========== PAGE 3 ==========
 local page3Frame = Instance.new("Frame")
 page3Frame.BackgroundTransparency = 1
 page3Frame.Position               = UDim2.new(0,8,0,80)
@@ -2014,6 +2087,9 @@ local ABUSE_COMMANDS = {
     {"goto [player]",      "Teleport to a player"},
     {"aimbot",             "Load aimbot script"},
     {"ia",                 "Load Ninni Hub script"},
+    {"aura / toggleaura",  "Auto-melee NPCs in range"},
+    {"noaura / unaura",    "Stop aura"},
+    {"aurareach n",        "Set aura range (1-30, default 21)"},
     {"rspy / remotespy",   "Load Cobalt remote spy"},
     {"simplespy",          "Load SimpleSpy V3"},
     {"jerk",               "Load jerk tool"},
@@ -2093,7 +2169,6 @@ local function updateAbuseInfoVisibility()
     end
 end
 
--- ========== ABUSE MODE ==========
 local function setAbuseMode(on)
     abuseMode = on
     updateAbuseInfoVisibility()
@@ -2200,11 +2275,11 @@ local function clearPreviewHighlight()
 end
 
 local cmdHints = {
+    {p="^esp%s+all$", h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
+    {p="^esp%s+others$", h=function() return "Enable ESP for all others (not you)" end},
+    {p="^esp%s+friends$", h=function() return "Enable ESP for friends only" end},
+    {p="^esp%s+bacons?$", h=function() return "Enable ESP for bacons only" end},
     {p="^esp%s+(%S+)", h=function(m)
-        if m == "all" then return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end
-        if m == "others" then return "Enable ESP for others (not you)" end
-        if m == "friends" then return "Enable ESP for friends only" end
-        if m == "bacons" or m == "bacon" then return "Enable ESP for bacons only" end
         local pl = findPlayer(m)
         if pl then
             local has = PARENT:FindFirstChild(pl.Name.."_SPY_ESP") ~= nil
@@ -2216,33 +2291,45 @@ local cmdHints = {
     {p="^esp$",             h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
     {p="^unesp%s+(%S+)",   h=function(m) local pl=findPlayer(m) return pl and "Remove ESP — "..pl.Name or "unesp [player]" end},
     {p="^unesp$",           h=function() return "Remove all ESP" end},
-    {p="^toggleesp%s*(%S*)",h=function(m)
-        if m ~= "" then return "Bind ESP toggle to key: " .. m:upper() end
-        return toggleESPKey and ("Remove toggle key (currently: "..toggleESPKey:upper()..")") or "toggleesp [key] — bind a toggle key"
+    {p="^toggleesp%s+(%S+)",h=function(m) return "Bind ESP toggle to key: " .. m:upper() end},
+    {p="^toggleesp$", h=function()
+        return toggleESPKey and "Remove toggle key (currently: "..toggleESPKey:upper()..")" or "toggleesp [key] — bind a toggle key"
     end},
-    {p="^togglefc%s*(%S*)",h=function(m)
-        if m ~= "" then return "Bind Freecam toggle to key: " .. m:upper() end
-        return toggleFCKey and ("Remove toggle key (currently: "..toggleFCKey:upper()..")") or "togglefc [key] — bind a toggle key"
+    {p="^togglefc%s+(%S+)",h=function(m) return "Bind Freecam toggle to key: " .. m:upper() end},
+    {p="^togglefc$", h=function()
+        return toggleFCKey and "Remove toggle key (currently: "..toggleFCKey:upper()..")" or "togglefc [key] — bind a toggle key"
     end},
-    {p="^togglefreecam%s*(%S*)",h=function(m)
-        if m ~= "" then return "Bind Freecam toggle to key: " .. m:upper() end
-        return toggleFCKey and ("Remove toggle key (currently: "..toggleFCKey:upper()..")") or "togglefreecam [key] — bind a toggle key"
+    {p="^togglefreecam%s+(%S+)",h=function(m) return "Bind Freecam toggle to key: " .. m:upper() end},
+    {p="^togglefreecam$", h=function()
+        return toggleFCKey and "Remove toggle key (currently: "..toggleFCKey:upper()..")" or "togglefreecam [key] — bind a toggle key"
     end},
-    {p="^togglefly%s*(%S*)",h=function(m)
-        if m ~= "" then return "Bind Fly toggle to key: " .. m:upper() end
-        return toggleFlyKey and ("Remove toggle key (currently: "..toggleFlyKey:upper()..")") or "togglefly [key] — bind a toggle key"
+    {p="^togglefly%s+(%S+)",h=function(m) return "Bind Fly toggle to key: " .. m:upper() end},
+    {p="^togglefly$", h=function()
+        return toggleFlyKey and "Remove toggle key (currently: "..toggleFlyKey:upper()..")" or "togglefly [key] — bind a toggle key"
     end},
     {p="^untogglefly$", h=function()
         return toggleFlyKey and "Remove fly toggle key (currently: "..toggleFlyKey:upper()..")" or "No fly toggle key set"
     end},
-    {p="^esptransparency%s*(%S*)", h=function(m)
+    {p="^untogglefc$", h=function()
+        return toggleFCKey and "Remove freecam toggle key (currently: "..toggleFCKey:upper()..")" or "No freecam toggle key set"
+    end},
+    {p="^untoggleesp$", h=function()
+        return toggleESPKey and "Remove ESP toggle key (currently: "..toggleESPKey:upper()..")" or "No ESP toggle key set"
+    end},
+    {p="^esptransparency%s+(%S+)", h=function(m)
         local v = tonumber(m)
         if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
         return string.format("esptransparency [0.01–0.95]  (current: %.2f)", espAlpha)
     end},
-    {p="^espt%s*(%S*)", h=function(m)
+    {p="^esptransparency$", h=function()
+        return string.format("esptransparency [0.01–0.95]  (current: %.2f)", espAlpha)
+    end},
+    {p="^espt%s+(%S+)", h=function(m)
         local v = tonumber(m)
         if v then v = math.clamp(v, 0.01, 0.95); return string.format("Set ESP transparency to %.2f", v) end
+        return string.format("espt [0.01–0.95]  (current: %.2f)", espAlpha)
+    end},
+    {p="^espt$", h=function()
         return string.format("espt [0.01–0.95]  (current: %.2f)", espAlpha)
     end},
     {p="^view%s+(%S+)",   h=function(m)
@@ -2250,34 +2337,39 @@ local cmdHints = {
         if pl then return "Spectate "..pl.Name..(pl.DisplayName~=pl.Name and " ("..pl.DisplayName..")" or "") end
         return "view [player]"
     end},
+    {p="^view$", h=function() return "view [player] — spectate a player" end},
     {p="^spectate%s+(%S+)", h=function(m)
         local pl=findPlayer(m)
         if pl then return "Spectate "..pl.Name..(pl.DisplayName~=pl.Name and " ("..pl.DisplayName..")" or "") end
         return "spectate [player]"
     end},
-    {p="^unview$",        h=function() return "Stop spectating" end},
-    {p="^unspectate$",    h=function() return "Stop spectating" end},
+    {p="^spectate$", h=function() return "spectate [player] — spectate a player" end},
+    {p="^unview$",        h=function() return viewing and "Stop spectating "..viewing.Name or "Not spectating anyone" end},
+    {p="^unspectate$",    h=function() return viewing and "Stop spectating "..viewing.Name or "Not spectating anyone" end},
     {p="^freecam$",       h=function() return fcRunning and "Close freecam" or "Open freecam" end},
     {p="^fc$",            h=function() return fcRunning and "Close freecam" or "Open freecam" end},
     {p="^unfreecam$",     h=function() return "Close freecam" end},
     {p="^unfc$",          h=function() return "Close freecam" end},
-    {p="^fcspeed%s+(%S*)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
-    {p="^freecamspeed%s+(%S*)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
-    {p="^fixcam$",        h=function() return "Reset camera" end},
-    {p="^fb$",            h=function() return "Enable fullbright" end},
-    {p="^fullbright$",    h=function() return "Enable fullbright" end},
+    {p="^fcspeed%s+(%S+)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
+    {p="^fcspeed$",h=function() return "fcspeed [number] — set freecam speed" end},
+    {p="^freecamspeed%s+(%S+)",h=function(m) return "Freecam speed: "..(m~="" and m or "?") end},
+    {p="^freecamspeed$",h=function() return "freecamspeed [number] — set freecam speed" end},
+    {p="^fixcam$",        h=function() return "Reset camera to default" end},
+    {p="^fb$",            h=function() return fbEnabled and "Disable fullbright" or "Enable fullbright" end},
+    {p="^fullbright$",    h=function() return fbEnabled and "Disable fullbright" or "Enable fullbright" end},
     {p="^unfb$",          h=function() return "Disable fullbright" end},
     {p="^nofullbright$",  h=function() return "Disable fullbright" end},
-    {p="^day$",           h=function() return "Set daytime" end},
-    {p="^night$",         h=function() return "Set nighttime" end},
-    {p="^nofog$",         h=function() return "Remove fog" end},
-    {p="^rejoin$",        h=function() return "Rejoin server" end},
-    {p="^rj$",            h=function() return "Rejoin server" end},
+    {p="^day$",           h=function() return "Set daytime (ClockTime = 14)" end},
+    {p="^night$",         h=function() return "Set nighttime (ClockTime = 0)" end},
+    {p="^nofog$",         h=function() return "Remove fog (FogEnd = 100000)" end},
+    {p="^rejoin$",        h=function() return "Rejoin current server" end},
+    {p="^rj$",            h=function() return "Rejoin current server" end},
     {p="^copyname%s+(%S+)", h=function(m)
         local pl = findPlayer(m)
         if pl then return "Copy name: "..pl.Name end
         return "copyname [player]"
     end},
+    {p="^copyname$", h=function() return "copyname [player] — copy player name to clipboard" end},
     {p="^antilag$",       h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
     {p="^boostfps$",      h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
     {p="^lowgraphics$",   h=function() return antilagActive and "Anti-lag already ON" or "Enable anti-lag / boost FPS" end},
@@ -2289,17 +2381,29 @@ local cmdHints = {
         if pl then return "Kill "..pl.Name end
         return "soakill [player]"
     end},
+    {p="^soakill$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "soakill [player] — kill a player"
+    end},
     {p="^fling%s+(%S+)", h=function(m)
         if not abuseMode then return "Requires abuse mode" end
         local pl = findPlayer(m)
         if pl then return "Fling "..pl.Name end
         return "fling [player]"
     end},
+    {p="^fling$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "fling [player] — fling a player"
+    end},
     {p="^goto%s+(%S+)", h=function(m)
         if not abuseMode then return "Requires abuse mode" end
         local pl = findPlayer(m)
-        if pl then return "Goto "..pl.Name end
+        if pl then return "Teleport to "..pl.Name end
         return "goto [player]"
+    end},
+    {p="^goto$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "goto [player] — teleport to a player"
     end},
     {p="^aimbot$", h=function()
         if not abuseMode then return "Requires abuse mode" end
@@ -2308,6 +2412,35 @@ local cmdHints = {
     {p="^ia$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load Ninni Hub script"
+    end},
+    {p="^aura$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return auraState.active and "Stop aura" or "Start aura (range: "..auraState.reach..")"
+    end},
+    {p="^toggleaura$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return auraState.active and "Stop aura" or "Start aura (range: "..auraState.reach..")"
+    end},
+    {p="^noaura$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return auraState.active and "Stop aura" or "Aura is already OFF"
+    end},
+    {p="^unaura$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return auraState.active and "Stop aura" or "Aura is already OFF"
+    end},
+    {p="^aurareach%s+(%S+)", h=function(m)
+        if not abuseMode then return "Requires abuse mode" end
+        local v = tonumber(m)
+        if v then
+            v = math.clamp(v, 1, 30)
+            return string.format("Set aura range to %d (current: %d, max: 30)", v, auraState.reach)
+        end
+        return string.format("aurareach [1-30]  (current: %d)", auraState.reach)
+    end},
+    {p="^aurareach$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return string.format("aurareach [1-30]  (current: %d, default: 21, max: 30)", auraState.reach)
     end},
     {p="^rspy$", h=function()
         if not abuseMode then return "Requires abuse mode" end
@@ -2337,15 +2470,21 @@ local cmdHints = {
         if not abuseMode then return "Requires abuse mode" end
         return flyState.flying and "Stop flying" or "Not flying"
     end},
-    {p="^flyspeed%s+(%S*)",h=function(m)
+    {p="^flyspeed%s+(%S+)",h=function(m)
         local v = tonumber(m)
         if v then return string.format("Fly speed multiplier: %.2fx", v) end
-        return string.format("Fly speed multiplier: %.2fx (1 = normal)", flyState.flySpeed)
+        return string.format("flyspeed [number]  (current: %.2fx)", flyState.flySpeed)
     end},
-    {p="^flyws%s+(%S*)",h=function(m)
+    {p="^flyspeed$",h=function()
+        return string.format("flyspeed [number]  (current: %.2fx, 1 = normal)", flyState.flySpeed)
+    end},
+    {p="^flyws%s+(%S+)",h=function(m)
         local v = tonumber(m)
         if v then return string.format("Fly speed multiplier: %.2fx", v) end
-        return string.format("Fly speed multiplier: %.2fx (1 = normal)", flyState.flySpeed)
+        return string.format("flyws [number]  (current: %.2fx)", flyState.flySpeed)
+    end},
+    {p="^flyws$",h=function()
+        return string.format("flyws [number]  (current: %.2fx, 1 = normal)", flyState.flySpeed)
     end},
 }
 
@@ -2359,7 +2498,7 @@ local function getHint(text)
         local m = t:match(e.p)
         if m ~= nil then return e.h(m) end
     end
-    return ""
+    return "Type a command... (press ? for help)"
 end
 
 local function execCmd(raw)
@@ -2494,6 +2633,18 @@ local function execCmd(raw)
     elseif cmd == "ia" then
         if not abuseMode then return end
         doIA()
+    elseif cmd == "aura" or cmd == "toggleaura" then
+        if not abuseMode then return end
+        toggleAura()
+    elseif cmd == "noaura" or cmd == "unaura" then
+        if not abuseMode then return end
+        stopAura()
+    elseif cmd == "aurareach" then
+        if not abuseMode then return end
+        local v = tonumber(arg1)
+        if v then
+            setAuraReach(v)
+        end
     elseif cmd == "rspy" or cmd == "remotespy" then
         if not abuseMode then return end
         doRspy()
@@ -2524,7 +2675,6 @@ local function execCmd(raw)
     end
 end
 
--- ========== MOUSE OVER GUI TRACKING ==========
 local mouseOverGui = false
 
 gui.MouseEnter:Connect(function()
