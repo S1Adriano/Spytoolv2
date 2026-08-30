@@ -1033,6 +1033,7 @@ local function stopNoclip()
 end
 
 local function startFly()
+    if not abuseMode then return end
     if flyState.flying then return end
     local char = lp.Character
     if not char then return end
@@ -2865,6 +2866,30 @@ end)
 
 espTransBox.FocusLost:Connect(function()
     scheduleHide()
+end)
+
+cmdBar:GetPropertyChangedSignal("Text"):Connect(function()
+    if prefixWaiting then return end
+    if cmdBar.Text:find("\t") then
+        cmdBar.Text = cmdBar.Text:gsub("\t", "")
+    end
+    
+    local textForHint = cmdBar.Text
+    if textForHint:sub(1, #prefix) == prefix then
+        textForHint = textForHint:sub(#prefix + 1)
+    end
+    updateHint(getHint(textForHint))
+    
+    local textForAC = cmdBar.Text
+    if textForAC:sub(1, #prefix) == prefix then
+        textForAC = textForAC:sub(#prefix + 1)
+    end
+    local cmd, query = parseACInput(textForAC)
+    if cmd then
+        showAC(cmd, query)
+    else
+        clearAC()
+    end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gp)
