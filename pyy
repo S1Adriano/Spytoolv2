@@ -2149,6 +2149,7 @@ local ABUSE_COMMANDS = {
     {"goto [player]",      "Teleport to a player"},
     {"aimbot",             "Load aimbot script"},
     {"ia",                 "Load Ninni Hub script"},
+    {"vanehub",            "Load VaneHub (coming soon)"},
     {"aura / toggleaura",  "Auto-melee NPCs in range"},
     {"noaura / unaura",    "Stop aura"},
     {"aurareach n",        "Set aura range (1-30, default 21)"},
@@ -2339,10 +2340,10 @@ local function clearPreviewHighlight()
 end
 
 local cmdHints = {
-    {p="^esp%s+all$", h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
-    {p="^esp%s+others$", h=function() return "Enable ESP for all others (not you)" end},
-    {p="^esp%s+friends$", h=function() return "Enable ESP for friends only" end},
-    {p="^esp%s+bacons?$", h=function() return "Enable ESP for bacons only" end},
+    {p="^esp%s+all%s*$", h=function() return ESPenabled and "Disable all ESP" or "Enable ESP for everyone" end},
+    {p="^esp%s+others%s*$", h=function() return "Enable ESP for all others (not you)" end},
+    {p="^esp%s+friends%s*$", h=function() return "Enable ESP for friends only" end},
+    {p="^esp%s+bacons?%s*$", h=function() return "Enable ESP for bacons only" end},
     {p="^esp%s+(%S+)", h=function(m)
         local pl = findPlayer(m)
         if pl then
@@ -2483,6 +2484,10 @@ local cmdHints = {
     {p="^ia%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load Ninni Hub script"
+    end},
+    {p="^vanehub%s*$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load VaneHub (coming soon)"
     end},
     {p="^aura%s*$", h=function()
         if not abuseMode then return "Requires abuse mode" end
@@ -2708,6 +2713,9 @@ local function execCmd(raw)
     elseif cmd == "ia" then
         if not abuseMode then return end
         doIA()
+    elseif cmd == "vanehub" then
+        if not abuseMode then return end
+        print("coming soon")
     elseif cmd == "aura" or cmd == "toggleaura" then
         if not abuseMode then return end
         toggleAura()
