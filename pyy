@@ -1015,6 +1015,14 @@ local function doAimbot()
     return ok
 end
 
+-- ========== IA (Ninni Hub) ==========
+local function doIA()
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/S1Adriano/ninnitruco/refs/heads/main/ninnihub"))()
+    end)
+    return ok
+end
+
 -- ========== FLY + NOCLIP ==========
 local BASE_FLY_SPEED = 80
 local flyState = {
@@ -2005,6 +2013,7 @@ local ABUSE_COMMANDS = {
     {"fling [player]",     "Fling a player"},
     {"goto [player]",      "Teleport to a player"},
     {"aimbot",             "Load aimbot script"},
+    {"ia",                 "Load Ninni Hub script"},
     {"rspy / remotespy",   "Load Cobalt remote spy"},
     {"simplespy",          "Load SimpleSpy V3"},
     {"jerk",               "Load jerk tool"},
@@ -2296,6 +2305,10 @@ local cmdHints = {
         if not abuseMode then return "Requires abuse mode" end
         return "Load aimbot script"
     end},
+    {p="^ia$", h=function()
+        if not abuseMode then return "Requires abuse mode" end
+        return "Load Ninni Hub script"
+    end},
     {p="^rspy$", h=function()
         if not abuseMode then return "Requires abuse mode" end
         return "Load Cobalt remote spy"
@@ -2478,6 +2491,9 @@ local function execCmd(raw)
     elseif cmd == "aimbot" then
         if not abuseMode then return end
         doAimbot()
+    elseif cmd == "ia" then
+        if not abuseMode then return end
+        doIA()
     elseif cmd == "rspy" or cmd == "remotespy" then
         if not abuseMode then return end
         doRspy()
@@ -2511,57 +2527,38 @@ end
 -- ========== MOUSE OVER GUI TRACKING ==========
 local mouseOverGui = false
 
-local function setupMouseTracking(element)
-    if not element then return end
-    pcall(function()
-        element.MouseEnter:Connect(function()
-            mouseOverGui = true
-        end)
-        element.MouseLeave:Connect(function()
-            local stillOver = false
-            pcall(function()
-                local mousePos = UserInputService:GetMouseLocation()
-                local absPos = gui.AbsolutePosition
-                local absSize = gui.AbsoluteSize
-                if mousePos.X >= absPos.X and mousePos.X <= absPos.X + absSize.X and
-                   mousePos.Y >= absPos.Y and mousePos.Y <= absPos.Y + absSize.Y then
-                    stillOver = true
-                end
-            end)
-            mouseOverGui = stillOver
-        end)
-    end)
-end
-
-setupMouseTracking(gui)
-
-local function setupAllMouseTracking()
-    for _, btn in pairs(pageButtons) do
-        setupMouseTracking(btn)
-    end
-    for _, btn in pairs(buttons) do
-        setupMouseTracking(btn)
-    end
-    setupMouseTracking(prefixBox)
-    setupMouseTracking(unviewBtn)
-    setupMouseTracking(acFrame)
-end
-
-cmdBar:GetPropertyChangedSignal("Text"):Connect(function()
-    if prefixWaiting then return end
-    if cmdBar.Text:find("\t") then
-        cmdBar.Text = cmdBar.Text:gsub("\t", "")
-    end
-    updateHint(getHint(cmdBar.Text))
-    local cmd, query = parseACInput(cmdBar.Text)
-    if cmd then
-        showAC(cmd, query)
-    else
-        clearAC()
+gui.MouseEnter:Connect(function()
+    mouseOverGui = true
+    if hideTimer then
+        task.cancel(hideTimer)
+        hideTimer = nil
     end
 end)
 
-local hideTimer = nil
+gui.MouseLeave:Connect(function()
+    mouseOverGui = false
+    scheduleHide()
+end)
+
+local function isMouseOverGui()
+    if not gui.Visible then return false end
+    local mousePos = UserInputService:GetMouseLocation()
+    local absPos = gui.AbsolutePosition
+    local absSize = gui.AbsoluteSize
+    if mousePos.X >= absPos.X and mousePos.X <= absPos.X + absSize.X and
+       mousePos.Y >= absPos.Y and mousePos.Y <= absPos.Y + absSize.Y then
+        return true
+    end
+    return false
+end
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        if gui.Visible then
+            mouseOverGui = isMouseOverGui()
+        end
+    end
+end)
 
 local function isAnyTextboxFocused()
     return cmdBar:IsFocused() or fcSpeedBox:IsFocused() or viewBox:IsFocused() or espTransBox:IsFocused()
@@ -2575,12 +2572,11 @@ end
 local function scheduleHide()
     if hideTimer then task.cancel(hideTimer) end
     hideTimer = task.delay(2, function()
-        if mouseOverGui or isAnyTextboxFocused() or prefixWaiting then
-            if mouseOverGui or isAnyTextboxFocused() then
-                scheduleHide()
-            end
+        if isMouseOverGui() or isAnyTextboxFocused() or prefixWaiting then
+            scheduleHide()
             return
         end
+        
         gui.Visible     = false
         hintBar.Visible = false
         clearAC()
@@ -2723,8 +2719,4 @@ Players.PlayerRemoving:Connect(function(plr)
         playerAddedConns[plr.Name] = nil
     end
     if viewing == plr then stopView() end
-end)
-
-task.defer(function()
-    setupAllMouseTracking()
 end)
