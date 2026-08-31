@@ -227,6 +227,21 @@ local function makeESP(plr)
         r.BackgroundColor3 = espColor; r.BackgroundTransparency = currentAlpha; r.BorderSizePixel = 0; r.ZIndex = 3
         r.Position = UDim2.new(1,-thick,0,0); r.Size = UDim2.new(0,thick,1,0); r.Parent = box
 
+        local distText = Instance.new("TextLabel")
+        distText.BackgroundTransparency = 1
+        distText.AnchorPoint = Vector2.new(0.5, 1)
+        distText.Position = UDim2.new(0.5, 0, 0, -16)
+        distText.Size = UDim2.new(1, 0, 0, 12)
+        distText.Font = Enum.Font.GothamBold
+        distText.TextSize = 9
+        distText.TextColor3 = espColor
+        distText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
+        distText.TextStrokeColor3 = Color3.new(0,0,0)
+        distText.TextXAlignment = Enum.TextXAlignment.Center
+        distText.ZIndex = 4
+        distText.Text = ""
+        distText.Parent = box
+
         local nameText = Instance.new("TextLabel")
         nameText.BackgroundTransparency = 1
         nameText.AnchorPoint = Vector2.new(0.5, 1)
@@ -241,21 +256,6 @@ local function makeESP(plr)
         nameText.ZIndex = 4
         nameText.Text = plr.Name
         nameText.Parent = box
-
-        local distText = Instance.new("TextLabel")
-        distText.BackgroundTransparency = 1
-        distText.AnchorPoint = Vector2.new(0.5, 0)
-        distText.Position = UDim2.new(0.5, 0, 0, 14)
-        distText.Size = UDim2.new(1, 0, 0, 14)
-        distText.Font = Enum.Font.GothamBold
-        distText.TextSize = 11
-        distText.TextColor3 = espColor
-        distText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
-        distText.TextStrokeColor3 = Color3.new(0,0,0)
-        distText.TextXAlignment = Enum.TextXAlignment.Center
-        distText.ZIndex = 4
-        distText.Text = ""
-        distText.Parent = box
 
         local hpText = Instance.new("TextLabel")
         hpText.BackgroundTransparency = 1
@@ -293,9 +293,6 @@ local function makeESP(plr)
             workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
             cam = workspace.CurrentCamera
         end
-
-        local MIN_BOX_SIZE = 20
-        local MIN_BOX_SIZE_FAR = 15
 
         local loop = RunService.RenderStepped:Connect(function()
             if not S.ESPenabled and not soloESPPlayers[plr.Name] then
@@ -353,18 +350,22 @@ local function makeESP(plr)
             
             box.Visible = true
             hpBarBg.Visible = true
+
+            local screenH = math.abs(hSc.Y - fSc.Y)
+            local screenW = screenH * 0.55
+
+            if distance > 50 then
+                local farScale = math.max(0.3, 1 - (distance - 50) / 300)
+                screenH = screenH * farScale
+                screenW = screenW * farScale
+            end
+
+            screenH = math.max(screenH, 10)
+            screenW = math.max(screenW, 6)
+
             nameText.Visible = distance > 13
             distText.Visible = distance > 13
 
-            local screenH = math.max(math.abs(hSc.Y - fSc.Y), MIN_BOX_SIZE)
-            local screenW = math.max(screenH * 0.55, MIN_BOX_SIZE * 0.55)
-            
-            if distance > 100 then
-                local farScale = math.max(MIN_BOX_SIZE_FAR / MIN_BOX_SIZE, 1 - (distance - 100) / 500)
-                screenH = math.max(screenH * farScale, MIN_BOX_SIZE_FAR)
-                screenW = math.max(screenW * farScale, MIN_BOX_SIZE_FAR * 0.55)
-            end
-            
             local cx = hSc.X
             local topY = math.min(hSc.Y, fSc.Y)
             local leftX = cx - screenW * 0.5
@@ -376,12 +377,15 @@ local function makeESP(plr)
             hpBarBg.Position = UDim2.new(0, rightX + 2, 0, topY)
             hpBarBg.Size = UDim2.new(0, barW, 0, screenH)
 
+            local nameSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
+            nameText.TextSize = nameSize
+            distText.TextSize = nameSize
+            distText.Position = UDim2.new(0.5, 0, 0, -(nameSize + 4))
+
             local hpSize = math.clamp(math.floor(screenH * 0.1), 6, 14)
             hpText.TextSize = hpSize
             hpText.Size = UDim2.new(0, math.max(screenW - 4, 20), 0, hpSize + 2)
             hpText.Position = UDim2.new(1, -2, 1, -2)
-            nameText.TextSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
-            distText.TextSize = math.clamp(math.floor(screenH * 0.09), 7, 12)
 
             local hp = math.clamp(currentHum.Health, 0, currentHum.MaxHealth)
             local mx = math.max(currentHum.MaxHealth, 1)
@@ -400,7 +404,7 @@ local function makeESP(plr)
                 )
             end
             hpText.Text = math.floor(pct*100) .. "%"
-            distText.Text = math.floor(distance) .. " studs"
+            distText.Text = tostring(math.floor(distance))
         end)
 
         espLoops[plr.Name] = loop
