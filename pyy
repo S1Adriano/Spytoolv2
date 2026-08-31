@@ -41,6 +41,7 @@ local S = {
     fbEnabled = false,
     antilagActive = false,
     walkflingActive = false,
+    walkflingWasActive = false,
     viewing = nil,
     prefixWaiting = false,
     mouseOverGui = false,
@@ -256,6 +257,21 @@ local function makeESP(plr)
         nameText.Text = plr.Name
         nameText.Parent = box
 
+        local distText = Instance.new("TextLabel")
+        distText.BackgroundTransparency = 1
+        distText.AnchorPoint = Vector2.new(0.5, 0)
+        distText.Position = UDim2.new(0.5, 0, 1, 2)
+        distText.Size = UDim2.new(1, 0, 0, 12)
+        distText.Font = Enum.Font.GothamBold
+        distText.TextSize = 9
+        distText.TextColor3 = Color3.fromRGB(180, 180, 180)
+        distText.TextStrokeTransparency = math.min(0.3 + currentAlpha * 0.7, 1)
+        distText.TextStrokeColor3 = Color3.new(0,0,0)
+        distText.TextXAlignment = Enum.TextXAlignment.Center
+        distText.ZIndex = 4
+        distText.Text = ""
+        distText.Parent = box
+
         local hpBarBg = Instance.new("Frame")
         hpBarBg.BackgroundColor3 = Color3.fromRGB(20,20,20)
         hpBarBg.BackgroundTransparency = math.min(0.15 + currentAlpha * 0.85, 1)
@@ -277,6 +293,9 @@ local function makeESP(plr)
             workspace:GetPropertyChangedSignal("CurrentCamera"):Wait()
             cam = workspace.CurrentCamera
         end
+
+        local MIN_BOX_SIZE = 20
+        local MIN_BOX_SIZE_FAR = 15
 
         local loop = RunService.RenderStepped:Connect(function()
             if not S.ESPenabled and not soloESPPlayers[plr.Name] then
@@ -335,9 +354,17 @@ local function makeESP(plr)
             box.Visible = true
             hpBarBg.Visible = true
             nameText.Visible = distance > 13
+            distText.Visible = distance > 13
 
-            local screenH = math.max(math.abs(hSc.Y - fSc.Y), 10)
-            local screenW = screenH * 0.55
+            local screenH = math.max(math.abs(hSc.Y - fSc.Y), MIN_BOX_SIZE)
+            local screenW = math.max(screenH * 0.55, MIN_BOX_SIZE * 0.55)
+            
+            if distance > 100 then
+                local farScale = math.max(MIN_BOX_SIZE_FAR / MIN_BOX_SIZE, 1 - (distance - 100) / 500)
+                screenH = math.max(screenH * farScale, MIN_BOX_SIZE_FAR)
+                screenW = math.max(screenW * farScale, MIN_BOX_SIZE_FAR * 0.55)
+            end
+            
             local cx = hSc.X
             local topY = math.min(hSc.Y, fSc.Y)
             local leftX = cx - screenW * 0.5
@@ -351,9 +378,10 @@ local function makeESP(plr)
 
             local hpSize = math.clamp(math.floor(screenH * 0.1), 6, 14)
             hpText.TextSize = hpSize
-            hpText.Size = UDim2.new(1, -4, 0, hpSize + 2)
+            hpText.Size = UDim2.new(0, math.max(screenW - 4, 20), 0, hpSize + 2)
             hpText.Position = UDim2.new(1, -2, 1, -2)
             nameText.TextSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
+            distText.TextSize = math.clamp(math.floor(screenH * 0.07), 5, 10)
 
             local hp = math.clamp(currentHum.Health, 0, currentHum.MaxHealth)
             local mx = math.max(currentHum.MaxHealth, 1)
@@ -367,10 +395,12 @@ local function makeESP(plr)
             else
                 hpFill.BackgroundColor3 = Color3.new(
                     math.clamp(2*(1-pct), 0, 1),
-                    math.clamp(2*pct, 0, 1), 0
+                    math.clamp(2*pct, 0, 1),
+                    0
                 )
             end
             hpText.Text = math.floor(pct*100) .. "%"
+            distText.Text = math.floor(distance) .. " studs"
         end)
 
         espLoops[plr.Name] = loop
@@ -922,7 +952,10 @@ local function startWalkfling()
     if not hum then return end
     
     hum.Died:Connect(function()
-        stopWalkfling()
+        if S.walkflingActive then
+            S.walkflingWasActive = true
+            stopWalkfling()
+        end
     end)
     
     S.walkflingNoclipConn = RunService.Stepped:Connect(function()
@@ -936,9 +969,10 @@ local function startWalkfling()
     end)
     
     S.walkflingActive = true
+    S.walkflingWasActive = false
     
     S.walkflingThread = task.spawn(function()
-        while S.walkflingActive do
+        repeat RunService.Heartbeat:Wait()
             local character = lp.Character
             local root = getRoot(character)
             local vel, movel = nil, 0.1
@@ -950,7 +984,7 @@ local function startWalkfling()
             end
 
             vel = root.Velocity
-            root.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
+            root.Velocity = vel * 20000 + Vector3.new(0, 20000, 0)
 
             RunService.RenderStepped:Wait()
             if character and character.Parent and root and root.Parent then
@@ -962,7 +996,7 @@ local function startWalkfling()
                 root.Velocity = vel + Vector3.new(0, movel, 0)
                 movel = movel * -1
             end
-        end
+        until S.walkflingActive == false
         
         if S.walkflingNoclipConn then
             S.walkflingNoclipConn:Disconnect()
@@ -987,6 +1021,10 @@ local function toggleWalkfling()
     if S.walkflingActive then
         stopWalkfling()
     else
+        if S.walkflingWasActive then
+            S.walkflingWasActive = false
+            return
+        end
         startWalkfling()
     end
 end
@@ -1159,6 +1197,12 @@ local function doFling2(target)
         local predictedPos = predictPosition(targetRoot, predictTime)
         if not predictedPos then return end
         
+        local wasWalkflingActive = S.walkflingActive
+        if not S.walkflingActive then
+            startWalkfling()
+            wait(0.05)
+        end
+        
         local conn1 = RunService.Stepped:Connect(function()
             local c = lp.Character
             if not c then return end
@@ -1177,7 +1221,7 @@ local function doFling2(target)
         
         local vel, movel = nil, 0.1
         vel = root.Velocity
-        root.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
+        root.Velocity = vel * 20000 + Vector3.new(0, 20000, 0)
         
         RunService.RenderStepped:Wait()
         if char and char.Parent and root and root.Parent then
@@ -1191,7 +1235,7 @@ local function doFling2(target)
         
         root.CFrame = CFrame.new(predictedPos)
         
-        wait(0.1)
+        wait(0.2)
         
         targetRoot.Anchored = savedTargetAnchored
         targetRoot.CFrame = savedTargetPosition
@@ -1222,6 +1266,10 @@ local function doFling2(target)
                 end
             end
         end)
+        
+        if not wasWalkflingActive then
+            stopWalkfling()
+        end
     end)
     
     return ok
