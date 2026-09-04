@@ -41,7 +41,6 @@ local S = {
     fbEnabled = false,
     antilagActive = false,
     walkflingActive = false,
-    walkflingWasActive = false,
     viewing = nil,
     prefixWaiting = false,
     mouseOverGui = false,
@@ -590,11 +589,6 @@ do
         if char then
             local root = char:FindFirstChild("HumanoidRootPart")
             if root then S.savedCharCF = root.CFrame end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                s.autoRotate = hum.AutoRotate
-                hum.AutoRotate = false
-            end
         end
         
         S.freezeConn = RunService.RenderStepped:Connect(function()
@@ -606,8 +600,6 @@ do
             if c and S.savedCharCF then
                 local r = c:FindFirstChild("HumanoidRootPart")
                 if r then r.CFrame = S.savedCharCF end
-                local h = c:FindFirstChildOfClass("Humanoid")
-                if h and h.AutoRotate then h.AutoRotate = false end
             end
         end)
         
@@ -631,12 +623,6 @@ do
         end)
         
         if S.freezeConn then S.freezeConn:Disconnect(); S.freezeConn = nil end
-        
-        local char = lp.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then hum.AutoRotate = true end
-        end
         S.savedCharCF = nil
     end
 end
@@ -955,13 +941,6 @@ local function startWalkfling()
     local hum = char:FindFirstChildWhichIsA("Humanoid")
     if not hum then return end
     
-    hum.Died:Connect(function()
-        if S.walkflingActive then
-            S.walkflingWasActive = true
-            stopWalkfling()
-        end
-    end)
-    
     S.walkflingNoclipConn = RunService.Stepped:Connect(function()
         local c = lp.Character
         if not c then return end
@@ -973,7 +952,6 @@ local function startWalkfling()
     end)
     
     S.walkflingActive = true
-    S.walkflingWasActive = false
     
     S.walkflingThread = task.spawn(function()
         repeat RunService.Heartbeat:Wait()
@@ -1025,10 +1003,6 @@ local function toggleWalkfling()
     if S.walkflingActive then
         stopWalkfling()
     else
-        if S.walkflingWasActive then
-            S.walkflingWasActive = false
-            return
-        end
         startWalkfling()
     end
 end
@@ -1827,7 +1801,7 @@ end)
 UserInputService.InputChanged:Connect(function(i)
     if S.dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
         local d = i.Position - S.dragStart
-        gui.Position = UDim2.new(S.startPos.X.Scale, S.startPos.X.Offset+d.X, S.startPos.Y.Scale, S.startPos.Y.Offset+d.Y)
+        gui.Position = UDim2.new(S.startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
     end
 end)
 
