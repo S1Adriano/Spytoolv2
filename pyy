@@ -9,8 +9,10 @@ local TeleportService = game:GetService("TeleportService")
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 
 local lp = Players.LocalPlayer
+local playerGui = lp:WaitForChild("PlayerGui")
 
 local C = {
     BG = Color3.fromRGB(18, 18, 20),
@@ -60,6 +62,10 @@ local S = {
     cameraRot = Vector2.new(),
     cameraFov = 70,
     cameraWasVisible = true,
+    savedCameraCF = nil,
+    savedCameraFocus = nil,
+    showPlayerCount = true,
+    ignoreNpcs = false,
 }
 
 local T = {
@@ -109,6 +115,83 @@ local soloESPPlayers = {}
 local playerAddedConns = {}
 local _viewConns = {}
 local npcEspBoxes = {}
+
+-- ============================================================
+-- PLAYER COUNT / JOIN ALERT SYSTEM
+-- ============================================================
+local PLAYER_JOIN_SOUND_ID = "rbxassetid://130406186928352"
+
+local flashGui = Instance.new("ScreenGui")
+flashGui.Name = "FlashGui"
+flashGui.ResetOnSpawn = false
+flashGui.IgnoreGuiInset = true
+flashGui.DisplayOrder = 999999
+flashGui.Enabled = false
+flashGui.Parent = playerGui
+
+local flashFrame = Instance.new("Frame")
+flashFrame.Size = UDim2.new(1, 0, 1, 0)
+flashFrame.Position = UDim2.new(0, 0, 0, 0)
+flashFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+flashFrame.BackgroundTransparency = 0.3
+flashFrame.BorderSizePixel = 0
+flashFrame.ZIndex = 999999
+flashFrame.Parent = flashGui
+
+local function playPlayerJoinSound()
+    if not S.showPlayerCount then return end
+    task.spawn(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = PLAYER_JOIN_SOUND_ID
+        sound.Volume = 20
+        sound.Parent = SoundService
+        sound:Play()
+        task.delay(5, function()
+            if sound and sound.Parent then
+                sound:Destroy()
+            end
+        end)
+    end)
+end
+
+local function showFlash(isFriendJoin)
+    if not S.showPlayerCount then return end
+    
+    if isFriendJoin then
+        flashFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        flashFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+    
+    flashGui.Enabled = true
+    flashFrame.BackgroundTransparency = 0.3
+    
+    task.delay(0.3, function()
+        local tween = TweenService:Create(flashFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+        tween:Play()
+        tween.Completed:Connect(function()
+            flashGui.Enabled = false
+            flashFrame.BackgroundTransparency = 0.3
+        end)
+    end)
+end
+
+-- Preload sound
+task.spawn(function()
+    local preloadSound = Instance.new("Sound")
+    preloadSound.SoundId = PLAYER_JOIN_SOUND_ID
+    preloadSound.Volume = 0.01
+    preloadSound.Parent = SoundService
+    preloadSound:Play()
+    preloadSound.Ended:Connect(function()
+        preloadSound:Destroy()
+    end)
+    task.delay(3, function()
+        if preloadSound and preloadSound.Parent then
+            preloadSound:Destroy()
+        end
+    end)
+end)
 
 local function isFriend(plr)
     if plr == lp then return false end
@@ -585,22 +668,56 @@ do
         s.mb = UserInputService.MouseBehavior
         
         S.cameraWasVisible = UserInputService.MouseIconEnabled
+        S.savedCameraCF = Camera.CFrame
+        S.savedCameraFocus = Camera.Focus
         
-        Camera.FieldOfView = 70
+        -- PASO 1: Despegar la cámara del personaje (CameraSubject = nil)
+        local char = lp.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                Camera.CameraSubject = nil
+            end
+        end
+        
+        -- Pequeña espera para que la cámara se despegue completamente
+        task.wait(0.05)
+        
+        -- PASO 2: Poner la cámara en modo Scriptable
         Camera.CameraType = Enum.CameraType.Scriptable
+        Camera.FieldOfView = 70
+        
+        -- PASO 3: Guardar la posición actual de la cámara como punto de partida
+        S.cameraPos = Camera.CFrame.Position
+        S.cameraRot = Vector2.new(0, Camera.CFrame:ToEulerAnglesYXZ())
+        
+        -- PASO 4: Lockear el mouse para evitar que el personaje se mueva
         UserInputService.MouseIconEnabled = true
         UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
     end
     
     function PlayerState.Pop()
         Camera.FieldOfView = s.fov or 70
-        Camera.CameraType  = s.type or Enum.CameraType.Custom
-        Camera.CFrame      = s.cf or Camera.CFrame
-        Camera.Focus       = s.focus or Camera.Focus
         
+        -- PASO 1: Quitar el lock del mouse
         UserInputService.MouseIconEnabled = S.cameraWasVisible
         local mb = s.mb or Enum.MouseBehavior.Default
         UserInputService.MouseBehavior = mb
+        
+        -- PASO 2: Volver la cámara al personaje
+        local char = lp.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                Camera.CameraSubject = hum
+            end
+        end
+        
+        -- PASO 3: Restaurar el tipo de cámara
+        Camera.CameraType = s.type or Enum.CameraType.Custom
+        Camera.CFrame = s.cf or Camera.CFrame
+        Camera.Focus = s.focus or Camera.Focus
+        
         task.delay(0.1, function()
             if not S.fcRunning then UserInputService.MouseBehavior = mb end
         end)
@@ -737,8 +854,6 @@ end
 local function startFreecam(pos)
     if S.fcRunning then stopFreecam() return end
     S.cameraFov = Camera.FieldOfView
-    S.cameraPos = (pos or Camera.CFrame).Position
-    S.cameraRot = Vector2.new()
     velSpring:Reset(Vector3.new()); panSpring:Reset(Vector2.new())
     PlayerState.Push()
     RunService:BindToRenderStep("SpyFreecam", Enum.RenderPriority.Camera.Value, StepFreecam)
@@ -1525,6 +1640,39 @@ local function getSwingEvent()
     return ok and swingEvent or nil
 end
 
+-- ============================================================
+-- GET ALL NPCs FROM MULTIPLE PATHS
+-- ============================================================
+local function getAllNpcs()
+    local npcs = {}
+    local paths = {
+        {"NPCs", "Custom"},
+        {"NPCs", "Hostile"},
+        {"ActiveTasks", "Location"},
+        {"ActiveTasks", "Location", "AliveEnemies"},
+        {"ActiveTasks", "Folder"},
+        {"WaveSurvival", "NPCs"},
+    }
+    
+    for _, path in ipairs(paths) do
+        local folder = workspace
+        for _, part in ipairs(path) do
+            if folder then
+                folder = folder:FindFirstChild(part)
+            end
+        end
+        if folder then
+            for _, npc in pairs(folder:GetChildren()) do
+                if npc:IsA("Model") then
+                    local key = npc.Name .. "_" .. table.concat(path, "_")
+                    npcs[key] = npc
+                end
+            end
+        end
+    end
+    return npcs
+end
+
 local function getNPCCustomFolder()
     local ok, folder = pcall(function()
         return workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("Custom")
@@ -1635,9 +1783,6 @@ local function startAura()
     local hitEvent = getHitEvent()
     if not hitEvent then return end
     
-    local npcFolder = getNPCCustomFolder()
-    if not npcFolder then return end
-    
     AuraS.active = true
     
     AuraS.npcEspConn = RunService.RenderStepped:Connect(function()
@@ -1646,31 +1791,35 @@ local function startAura()
             return
         end
         
-        local folder = getNPCCustomFolder()
-        if not folder then
+        -- Si ignoreNpcs está activo, no mostrar ESP de NPCs
+        if S.ignoreNpcs then
             clearNpcEsp()
             return
         end
         
+        local allNpcs = getAllNpcs()
         local cam = workspace.CurrentCamera
         if not cam then return end
         
-        local validNpcs = {}
-        for _, npc in pairs(folder:GetChildren()) do
-            if npc:IsA("Model") then
-                local npcHum = npc:FindFirstChildOfClass("Humanoid")
-                if npcHum and npcHum.Health > 0 then
-                    validNpcs[npc.Name] = npc
-                    if not npcEspBoxes[npc.Name] then
-                        createNpcEsp(npc)
-                    end
+        for key, npc in pairs(allNpcs) do
+            local npcHum = npc:FindFirstChildOfClass("Humanoid")
+            if npcHum and npcHum.Health > 0 then
+                if not npcEspBoxes[key] then
+                    createNpcEsp(npc)
                 end
             end
         end
         
         for name, data in pairs(npcEspBoxes) do
-            local npc = validNpcs[name]
-            if not npc then
+            local npc = nil
+            for key, n in pairs(allNpcs) do
+                if key == name or n.Name == name then
+                    npc = n
+                    break
+                end
+            end
+            
+            if not npc or not npc.Parent then
                 if data.sg and data.sg.Parent then
                     data.sg:Destroy()
                 end
@@ -1744,19 +1893,14 @@ local function startAura()
             return
         end
         
-        local folder = getNPCCustomFolder()
-        if not folder then
-            stopAura()
-            return
-        end
-        
         local char = lp.Character
         if not char then return end
         
         local playerHead = char:FindFirstChild("Head")
         if not playerHead or not playerHead:IsA("BasePart") then return end
         
-        for _, npc in pairs(folder:GetChildren()) do
+        local allNpcs = getAllNpcs()
+        for key, npc in pairs(allNpcs) do
             pcall(function()
                 local humanoid = npc:FindFirstChildOfClass("Humanoid")
                 if humanoid and humanoid.Health > 0 then
@@ -1887,6 +2031,18 @@ titleLabel.Text                   = "SPY TOOL"
 titleLabel.TextColor3             = C.TEXT
 titleLabel.TextXAlignment         = Enum.TextXAlignment.Left
 titleLabel.Parent                 = titleBar
+
+-- Player count label
+local playerCountLabel = Instance.new("TextLabel")
+playerCountLabel.BackgroundTransparency = 1
+playerCountLabel.Position = UDim2.new(1,-75,0,8)
+playerCountLabel.Size = UDim2.new(0,45,0,12)
+playerCountLabel.Font = Enum.Font.SourceSansBold
+playerCountLabel.TextSize = 10
+playerCountLabel.Text = #Players:GetPlayers() .. " players"
+playerCountLabel.TextColor3 = C.SUBTEXT
+playerCountLabel.TextXAlignment = Enum.TextXAlignment.Right
+playerCountLabel.Parent = titleBar
 
 local pageNavFrame = Instance.new("Frame")
 pageNavFrame.BackgroundTransparency = 1
@@ -2579,6 +2735,7 @@ local COMMAND_INFO = {
     {"antilag / boostfps / lowgraphics", "Reduce graphics for FPS"},
     {"abuse",              "Enable abuse mode"},
     {"unabuse",            "Disable abuse mode"},
+    {"playercount",        "Toggle player join alerts"},
 }
 
 local ABUSE_COMMANDS = {
@@ -2597,6 +2754,8 @@ local ABUSE_COMMANDS = {
     {"aurapart [part]",    "Set aura aim part (head/torso/arms/legs)"},
     {"toggleaurakey [key]","Bind key to toggle aura"},
     {"untoggleaura",       "Remove aura toggle key"},
+    {"ignorenpcs / nonpcs", "Hide NPC ESP boxes"},
+    {"unignorenpcs / npcs", "Show NPC ESP boxes"},
     {"rspy / remotespy",   "Load Cobalt remote spy"},
     {"simplespy",          "Load SimpleSpy V3"},
     {"jerk",               "Load jerk tool"},
@@ -3034,6 +3193,33 @@ local cmdHints = {
     {p="^flyws%s*$",h=function()
         return string.format("flyws [number]  (current: %.2fx, 1 = normal)", FlyS.flySpeed)
     end},
+    {p="^playercount%s*$", h=function()
+        return S.showPlayerCount and "Disable player join alerts" or "Enable player join alerts"
+    end},
+    {p="^ignorenpcs%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return S.ignoreNpcs and "NPC ESP already hidden" or "Hide NPC ESP boxes"
+    end},
+    {p="^nonpcs%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return S.ignoreNpcs and "NPC ESP already hidden" or "Hide NPC ESP boxes"
+    end},
+    {p="^npcsoff%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return S.ignoreNpcs and "NPC ESP already hidden" or "Hide NPC ESP boxes"
+    end},
+    {p="^unignorenpcs%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return S.ignoreNpcs and "Show NPC ESP boxes" or "NPC ESP already visible"
+    end},
+    {p="^npcs%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return S.ignoreNpcs and "Show NPC ESP boxes" or "NPC ESP already visible"
+    end},
+    {p="^npcson%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return S.ignoreNpcs and "Show NPC ESP boxes" or "NPC ESP already visible"
+    end},
 }
 
 local function getHint(text)
@@ -3246,6 +3432,15 @@ local function execCmd(raw)
         if v and v > 0 then
             setFlySpeed(v)
         end
+    elseif cmd == "playercount" or cmd == "pcount" then
+        S.showPlayerCount = not S.showPlayerCount
+    elseif cmd == "ignorenpcs" or cmd == "nonpcs" or cmd == "npcsoff" then
+        if not S.abuseMode then return end
+        S.ignoreNpcs = true
+        clearNpcEsp()
+    elseif cmd == "unignorenpcs" or cmd == "npcs" or cmd == "npcson" then
+        if not S.abuseMode then return end
+        S.ignoreNpcs = false
     end
 end
 
@@ -3443,20 +3638,35 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
+
 Players.PlayerAdded:Connect(function(plr)
+    -- Update player count label
+    playerCountLabel.Text = #Players:GetPlayers() .. " players"
+    
+    -- Show flash and play sound
+    if S.showPlayerCount and plr ~= lp then
+        local isFriendJoin = isFriend(plr)
+        showFlash(isFriendJoin)
+        playPlayerJoinSound()
+    end
+    
+    -- ESP for new player if enabled
     if S.ESPenabled then
         makeESP(plr)
         playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
             task.wait(0.3)
             if S.ESPenabled then
                 task.wait(0.3)
-                if S.ESPenabled then makeESP(plr) end
+                if S.ESPEnabled then makeESP(plr) end
             end
         end)
     end
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
+    -- Update player count label
+    playerCountLabel.Text = (#Players:GetPlayers() - 1) .. " players"
+    
     clearESP(plr)
     soloESPPlayers[plr.Name] = nil
     if playerAddedConns[plr.Name] then
@@ -3464,4 +3674,14 @@ Players.PlayerRemoving:Connect(function(plr)
         playerAddedConns[plr.Name] = nil
     end
     if S.viewing == plr then stopView() end
+end)
+
+-- Update player count on initial load
+task.spawn(function()
+    while true do
+        if playerCountLabel and playerCountLabel.Parent then
+            playerCountLabel.Text = #Players:GetPlayers() .. " players"
+        end
+        task.wait(1)
+    end
 end)
