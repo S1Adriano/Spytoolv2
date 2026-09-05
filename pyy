@@ -138,6 +138,24 @@ flashFrame.BorderSizePixel = 0
 flashFrame.ZIndex = 999999
 flashFrame.Parent = flashGui
 
+local function isFriend(plr)
+    if plr == lp then return false end
+    local success, result = pcall(function()
+        return lp:IsFriendsWith(plr.UserId)
+    end)
+    return success and result
+end
+
+local function getEnemyCount()
+    local count = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= lp and not isFriend(plr) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
 local function playPlayerJoinSound()
     if not S.showPlayerCount then return end
     task.spawn(function()
@@ -192,14 +210,6 @@ task.spawn(function()
         end
     end)
 end)
-
-local function isFriend(plr)
-    if plr == lp then return false end
-    local success, result = pcall(function()
-        return lp:IsFriendsWith(plr.UserId)
-    end)
-    return success and result
-end
 
 local function isBacon(plr)
     local char = plr.Character
@@ -1641,47 +1651,98 @@ local function getSwingEvent()
 end
 
 -- ============================================================
+-- NPC PATHS (from reference script)
+-- ============================================================
+local NPC_PATHS = {
+    {"NPCs", "Hostile"},
+    {"ActiveTasks", "Location"},
+    {"ActiveTasks", "Location", "AliveEnemies"},
+    {"ActiveTasks", "Folder"},
+    {"WaveSurvival", "NPCs"},
+    {"NPCs", "Custom"},
+}
+
+-- Special NPC parts (legs for certain NPCs)
+local NPC_SPECIAL_PARTS = {
+    ["Taquito"] = {"Right Leg", "Left Leg"},
+    ["Military Operator"] = {"Right Leg", "Left Leg"},
+    ["Military Commander"] = {"Right Leg", "Left Leg"},
+    ["Military Bladedancer"] = {"Right Leg", "Left Leg"},
+    ["Military Blade Dancer"] = {"Right Leg", "Left Leg"},
+    ["Military BladeDancer"] = {"Right Leg", "Left Leg"},
+}
+
+local SPECIAL_NPC_NAMES = {}
+for name, _ in pairs(NPC_SPECIAL_PARTS) do
+    SPECIAL_NPC_NAMES[name] = true
+end
+
+-- ============================================================
 -- GET ALL NPCs FROM MULTIPLE PATHS
 -- ============================================================
-local function getAllNpcs()
-    local npcs = {}
-    local paths = {
-        {"NPCs", "Custom"},
-        {"NPCs", "Hostile"},
-        {"ActiveTasks", "Location"},
-        {"ActiveTasks", "Location", "AliveEnemies"},
-        {"ActiveTasks", "Folder"},
-        {"WaveSurvival", "NPCs"},
-    }
-    
-    for _, path in ipairs(paths) do
-        local folder = workspace
-        for _, part in ipairs(path) do
-            if folder then
-                folder = folder:FindFirstChild(part)
+local function findFolders(root, path, index)
+    if index > #path then
+        return {root}
+    end
+    local found = {}
+    local targetName = path[index]
+    for _, child in ipairs(root:GetChildren()) do
+        if child.Name == targetName and (child:IsA("Folder") or child:IsA("Model")) then
+            local sub = findFolders(child, path, index + 1)
+            for _, s in ipairs(sub) do
+                table.insert(found, s)
             end
         end
-        if folder then
-            for _, npc in pairs(folder:GetChildren()) do
-                if npc:IsA("Model") then
-                    local key = npc.Name .. "_" .. table.concat(path, "_")
-                    npcs[key] = npc
+    end
+    return found
+end
+
+local function getAllNpcs()
+    local result = {}
+    local seen = {}
+    for _, path in ipairs(NPC_PATHS) do
+        local folders = findFolders(workspace, path, 1)
+        for _, folder in ipairs(folders) do
+            for _, child in ipairs(folder:GetChildren()) do
+                if child:FindFirstChildOfClass("Humanoid") then
+                    local h = child:FindFirstChildOfClass("Humanoid")
+                    if h and h.Health > 0 and not seen[child] then
+                        seen[child] = true
+                        table.insert(result, child)
+                    end
                 end
             end
         end
     end
-    return npcs
+    return result
 end
 
-local function getNPCCustomFolder()
-    local ok, folder = pcall(function()
-        return workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild("Custom")
-    end)
-    return ok and folder or nil
+local function isSpecialNPC(character)
+    return SPECIAL_NPC_NAMES[character.Name] == true
+end
+
+local function getSpecialNPCParts(character)
+    local partsList = NPC_SPECIAL_PARTS[character.Name]
+    local availableParts = {}
+    if partsList then
+        for _, partName in ipairs(partsList) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then table.insert(availableParts, part) end
+        end
+    end
+    return availableParts
 end
 
 local function getAuraTargetPart(npc)
     local partName = AuraS.aimPart
+    
+    -- Special NPCs always target legs
+    if isSpecialNPC(npc) then
+        local specialParts = getSpecialNPCParts(npc)
+        if #specialParts > 0 then
+            return specialParts[1]
+        end
+    end
     
     if partName == "Head" then
         local head = npc:FindFirstChild("Head")
@@ -1779,6 +1840,7 @@ end
 
 local function startAura()
     if AuraS.active then return end
+    if not S.abuseMode then return end
     
     local hitEvent = getHitEvent()
     if not hitEvent then return end
@@ -3197,27 +3259,21 @@ local cmdHints = {
         return S.showPlayerCount and "Disable player join alerts" or "Enable player join alerts"
     end},
     {p="^ignorenpcs%s*$", h=function()
-        if not S.abuseMode then return "Requires abuse mode" end
         return S.ignoreNpcs and "NPC ESP already hidden" or "Hide NPC ESP boxes"
     end},
     {p="^nonpcs%s*$", h=function()
-        if not S.abuseMode then return "Requires abuse mode" end
         return S.ignoreNpcs and "NPC ESP already hidden" or "Hide NPC ESP boxes"
     end},
     {p="^npcsoff%s*$", h=function()
-        if not S.abuseMode then return "Requires abuse mode" end
         return S.ignoreNpcs and "NPC ESP already hidden" or "Hide NPC ESP boxes"
     end},
     {p="^unignorenpcs%s*$", h=function()
-        if not S.abuseMode then return "Requires abuse mode" end
         return S.ignoreNpcs and "Show NPC ESP boxes" or "NPC ESP already visible"
     end},
     {p="^npcs%s*$", h=function()
-        if not S.abuseMode then return "Requires abuse mode" end
         return S.ignoreNpcs and "Show NPC ESP boxes" or "NPC ESP already visible"
     end},
     {p="^npcson%s*$", h=function()
-        if not S.abuseMode then return "Requires abuse mode" end
         return S.ignoreNpcs and "Show NPC ESP boxes" or "NPC ESP already visible"
     end},
 }
@@ -3435,11 +3491,9 @@ local function execCmd(raw)
     elseif cmd == "playercount" or cmd == "pcount" then
         S.showPlayerCount = not S.showPlayerCount
     elseif cmd == "ignorenpcs" or cmd == "nonpcs" or cmd == "npcsoff" then
-        if not S.abuseMode then return end
         S.ignoreNpcs = true
         clearNpcEsp()
     elseif cmd == "unignorenpcs" or cmd == "npcs" or cmd == "npcson" then
-        if not S.abuseMode then return end
         S.ignoreNpcs = false
     end
 end
