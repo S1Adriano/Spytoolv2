@@ -66,6 +66,7 @@ local S = {
     savedCameraFocus = nil,
     showPlayerCount = false,
     ignoreNpcs = false,
+    fcFreezeConn = nil,
 }
 
 local T = {
@@ -138,6 +139,30 @@ flashFrame.BorderSizePixel = 0
 flashFrame.ZIndex = 999999
 flashFrame.Parent = flashGui
 
+-- PLAYER COUNT GUI (BIG LABEL)
+local playerCountGui = Instance.new("ScreenGui")
+playerCountGui.Name = "PlayerCountGui"
+playerCountGui.ResetOnSpawn = false
+playerCountGui.IgnoreGuiInset = true
+playerCountGui.Parent = playerGui
+playerCountGui.Enabled = false
+playerCountGui.DisplayOrder = 999998
+
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.fromOffset(220, 60)
+countLabel.Position = UDim2.fromOffset(20, 350)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "0 Players"
+countLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
+countLabel.TextSize = 40
+countLabel.Font = Enum.Font.GothamBold
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.TextStrokeTransparency = 0
+countLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+countLabel.Parent = playerCountGui
+
+local lastPlayerCount = #Players:GetPlayers()
+
 local function isFriend(plr)
     if plr == lp then return false end
     local success, result = pcall(function()
@@ -154,6 +179,31 @@ local function getEnemyCount()
         end
     end
     return count
+end
+
+local function updatePlayerCountColor()
+    local count = #Players:GetPlayers()
+    countLabel.Text = count .. (count == 1 and " Player" or " Players")
+    
+    local enemies = getEnemyCount()
+    
+    if enemies > 0 then
+        countLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+        
+        local originalSize = countLabel.Size
+        local bigSize = UDim2.fromOffset(240, 68)
+        
+        local tweenBig = TweenService:Create(countLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = bigSize})
+        tweenBig:Play()
+        tweenBig.Completed:Connect(function()
+            local tweenSmall = TweenService:Create(countLabel, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = originalSize})
+            tweenSmall:Play()
+        end)
+    else
+        countLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
+    end
+    
+    lastPlayerCount = count
 end
 
 local function playPlayerJoinSound()
@@ -681,7 +731,6 @@ do
         S.savedCameraCF = Camera.CFrame
         S.savedCameraFocus = Camera.Focus
         
-        -- PASO 1: Despegar la cámara del personaje (CameraSubject = nil)
         local char = lp.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
@@ -690,31 +739,38 @@ do
             end
         end
         
-        -- Pequeña espera para que la cámara se despegue completamente
         task.wait(0.05)
         
-        -- PASO 2: Poner la cámara en modo Scriptable
         Camera.CameraType = Enum.CameraType.Scriptable
         Camera.FieldOfView = 70
         
-        -- PASO 3: Guardar la posición actual de la cámara como punto de partida
         S.cameraPos = Camera.CFrame.Position
         S.cameraRot = Vector2.new(0, Camera.CFrame:ToEulerAnglesYXZ())
         
-        -- PASO 4: Lockear el mouse para evitar que el personaje se mueva
         UserInputService.MouseIconEnabled = true
         UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        
+        if S.fcFreezeConn then S.fcFreezeConn:Disconnect(); S.fcFreezeConn = nil end
+        S.fcFreezeConn = RunService.RenderStepped:Connect(function()
+            if not S.fcRunning then
+                if S.fcFreezeConn then S.fcFreezeConn:Disconnect(); S.fcFreezeConn = nil end
+                return
+            end
+            if Camera.CameraSubject ~= nil then
+                Camera.CameraSubject = nil
+            end
+        end)
     end
     
     function PlayerState.Pop()
+        if S.fcFreezeConn then S.fcFreezeConn:Disconnect(); S.fcFreezeConn = nil end
+        
         Camera.FieldOfView = s.fov or 70
         
-        -- PASO 1: Quitar el lock del mouse
         UserInputService.MouseIconEnabled = S.cameraWasVisible
         local mb = s.mb or Enum.MouseBehavior.Default
         UserInputService.MouseBehavior = mb
         
-        -- PASO 2: Volver la cámara al personaje
         local char = lp.Character
         if char then
             local hum = char:FindFirstChildOfClass("Humanoid")
@@ -723,7 +779,6 @@ do
             end
         end
         
-        -- PASO 3: Restaurar el tipo de cámara
         Camera.CameraType = s.type or Enum.CameraType.Custom
         Camera.CFrame = s.cf or Camera.CFrame
         Camera.Focus = s.focus or Camera.Focus
@@ -854,11 +909,11 @@ end
 
 local function stopFreecam()
     if not S.fcRunning then return end
+    S.fcRunning = false
     disableFreecamClickThrough()
     FCInput.StopCapture()
     RunService:UnbindFromRenderStep("SpyFreecam")
     PlayerState.Pop()
-    S.fcRunning = false
 end
 
 local function startFreecam(pos)
@@ -1651,7 +1706,7 @@ local function getSwingEvent()
 end
 
 -- ============================================================
--- NPC PATHS (from reference script)
+-- NPC PATHS
 -- ============================================================
 local NPC_PATHS = {
     {"NPCs", "Hostile"},
@@ -1662,23 +1717,8 @@ local NPC_PATHS = {
     {"NPCs", "Custom"},
 }
 
--- Special NPC parts (legs for certain NPCs)
-local NPC_SPECIAL_PARTS = {
-    ["Taquito"] = {"Right Leg", "Left Leg"},
-    ["Military Operator"] = {"Right Leg", "Left Leg"},
-    ["Military Commander"] = {"Right Leg", "Left Leg"},
-    ["Military Bladedancer"] = {"Right Leg", "Left Leg"},
-    ["Military Blade Dancer"] = {"Right Leg", "Left Leg"},
-    ["Military BladeDancer"] = {"Right Leg", "Left Leg"},
-}
-
-local SPECIAL_NPC_NAMES = {}
-for name, _ in pairs(NPC_SPECIAL_PARTS) do
-    SPECIAL_NPC_NAMES[name] = true
-end
-
 -- ============================================================
--- GET ALL NPCs FROM MULTIPLE PATHS
+-- GET ALL NPCs
 -- ============================================================
 local function findFolders(root, path, index)
     if index > #path then
@@ -1717,32 +1757,11 @@ local function getAllNpcs()
     return result
 end
 
-local function isSpecialNPC(character)
-    return SPECIAL_NPC_NAMES[character.Name] == true
-end
-
-local function getSpecialNPCParts(character)
-    local partsList = NPC_SPECIAL_PARTS[character.Name]
-    local availableParts = {}
-    if partsList then
-        for _, partName in ipairs(partsList) do
-            local part = character:FindFirstChild(partName)
-            if part and part:IsA("BasePart") then table.insert(availableParts, part) end
-        end
-    end
-    return availableParts
-end
-
+-- ============================================================
+-- AURA TARGET PART - SOLO USA LA PARTE CONFIGURADA, NADA MAS
+-- ============================================================
 local function getAuraTargetPart(npc)
     local partName = AuraS.aimPart
-    
-    -- Special NPCs always target legs
-    if isSpecialNPC(npc) then
-        local specialParts = getSpecialNPCParts(npc)
-        if #specialParts > 0 then
-            return specialParts[1]
-        end
-    end
     
     if partName == "Head" then
         local head = npc:FindFirstChild("Head")
@@ -1784,8 +1803,12 @@ local function clearNpcEsp()
     end
 end
 
+-- ============================================================
+-- NPC ESP - CAJA ROJA CLARA, MISMO FORMATO QUE PLAYERS
+-- ============================================================
 local function createNpcEsp(npc)
-    if npcEspBoxes[npc.Name] then return end
+    local uniqueKey = npc:GetFullName()
+    if npcEspBoxes[uniqueKey] then return end
     
     local sg = Instance.new("ScreenGui")
     sg.Name = npc.Name .. "_NPC_ESP"
@@ -1800,28 +1823,75 @@ local function createNpcEsp(npc)
     box.ZIndex = 2
     box.Parent = sg
 
+    -- CAJA ROJA CLARA
+    local espColor = Color3.fromRGB(255, 140, 140)
     local thick = 1
-    local espColor = Color3.fromRGB(255, 60, 60)
+    local currentAlpha = S.espAlpha
     
     local t = Instance.new("Frame")
-    t.BackgroundColor3 = espColor; t.BackgroundTransparency = 0.3; t.BorderSizePixel = 0; t.ZIndex = 3
+    t.BackgroundColor3 = espColor; t.BackgroundTransparency = currentAlpha; t.BorderSizePixel = 0; t.ZIndex = 3
     t.Position = UDim2.new(0,0,0,0); t.Size = UDim2.new(1,0,0,thick); t.Parent = box
 
     local b = Instance.new("Frame")
-    b.BackgroundColor3 = espColor; b.BackgroundTransparency = 0.3; b.BorderSizePixel = 0; b.ZIndex = 3
+    b.BackgroundColor3 = espColor; b.BackgroundTransparency = currentAlpha; b.BorderSizePixel = 0; b.ZIndex = 3
     b.Position = UDim2.new(0,0,1,-thick); b.Size = UDim2.new(1,0,0,thick); b.Parent = box
 
     local l = Instance.new("Frame")
-    l.BackgroundColor3 = espColor; l.BackgroundTransparency = 0.3; l.BorderSizePixel = 0; l.ZIndex = 3
+    l.BackgroundColor3 = espColor; l.BackgroundTransparency = currentAlpha; l.BorderSizePixel = 0; l.ZIndex = 3
     l.Position = UDim2.new(0,0,0,0); l.Size = UDim2.new(0,thick,1,0); l.Parent = box
 
     local r = Instance.new("Frame")
-    r.BackgroundColor3 = espColor; r.BackgroundTransparency = 0.3; r.BorderSizePixel = 0; r.ZIndex = 3
+    r.BackgroundColor3 = espColor; r.BackgroundTransparency = currentAlpha; r.BorderSizePixel = 0; r.ZIndex = 3
     r.Position = UDim2.new(1,-thick,0,0); r.Size = UDim2.new(0,thick,1,0); r.Parent = box
+
+    local distText = Instance.new("TextLabel")
+    distText.BackgroundTransparency = 1
+    distText.AnchorPoint = Vector2.new(0.5, 1)
+    distText.Position = UDim2.new(0.5, 0, 0, -16)
+    distText.Size = UDim2.new(1, 0, 0, 12)
+    distText.Font = Enum.Font.GothamBold
+    distText.TextSize = 9
+    distText.TextColor3 = espColor
+    distText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
+    distText.TextStrokeColor3 = Color3.new(0,0,0)
+    distText.TextXAlignment = Enum.TextXAlignment.Center
+    distText.ZIndex = 4
+    distText.Text = ""
+    distText.Parent = box
+
+    local nameText = Instance.new("TextLabel")
+    nameText.BackgroundTransparency = 1
+    nameText.AnchorPoint = Vector2.new(0.5, 1)
+    nameText.Position = UDim2.new(0.5, 0, 0, -2)
+    nameText.Size = UDim2.new(1, 0, 0, 14)
+    nameText.Font = Enum.Font.GothamBold
+    nameText.TextSize = 10
+    nameText.TextColor3 = espColor
+    nameText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
+    nameText.TextStrokeColor3 = Color3.new(0,0,0)
+    nameText.TextXAlignment = Enum.TextXAlignment.Center
+    nameText.ZIndex = 4
+    nameText.Text = npc.Name
+    nameText.Parent = box
+
+    local hpText = Instance.new("TextLabel")
+    hpText.BackgroundTransparency = 1
+    hpText.AnchorPoint = Vector2.new(1,1)
+    hpText.Position = UDim2.new(1,-2,1,-2)
+    hpText.Size = UDim2.new(0,40,0,14)
+    hpText.Font = Enum.Font.GothamBold
+    hpText.TextSize = 10
+    hpText.TextColor3 = espColor
+    hpText.TextStrokeTransparency = math.min(0.2 + currentAlpha * 0.8, 1)
+    hpText.TextStrokeColor3 = Color3.new(0,0,0)
+    hpText.TextXAlignment = Enum.TextXAlignment.Right
+    hpText.ZIndex = 4
+    hpText.Text = "100%"
+    hpText.Parent = box
 
     local hpBarBg = Instance.new("Frame")
     hpBarBg.BackgroundColor3 = Color3.fromRGB(20,20,20)
-    hpBarBg.BackgroundTransparency = 0.3
+    hpBarBg.BackgroundTransparency = math.min(0.15 + currentAlpha * 0.85, 1)
     hpBarBg.BorderSizePixel = 0
     hpBarBg.ZIndex = 2
     hpBarBg.Parent = sg
@@ -1835,110 +1905,139 @@ local function createNpcEsp(npc)
     hpFill.ZIndex = 3
     hpFill.Parent = hpBarBg
 
-    npcEspBoxes[npc.Name] = {sg = sg, box = box, hpBarBg = hpBarBg, hpFill = hpFill}
+    npcEspBoxes[uniqueKey] = {sg = sg, box = box, hpBarBg = hpBarBg, hpFill = hpFill, distText = distText, nameText = nameText, hpText = hpText, npc = npc}
+end
+
+local function updateAllNpcEsp()
+    if not S.ESPenabled or S.ignoreNpcs then
+        clearNpcEsp()
+        return
+    end
+    
+    local allNpcs = getAllNpcs()
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    
+    local validKeys = {}
+    
+    for _, npc in pairs(allNpcs) do
+        local uniqueKey = npc:GetFullName()
+        validKeys[uniqueKey] = true
+        
+        local npcHum = npc:FindFirstChildOfClass("Humanoid")
+        if npcHum and npcHum.Health > 0 then
+            if not npcEspBoxes[uniqueKey] then
+                createNpcEsp(npc)
+            end
+        end
+    end
+    
+    for uniqueKey, data in pairs(npcEspBoxes) do
+        local npc = data.npc
+        
+        if not validKeys[uniqueKey] or not npc or not npc.Parent then
+            if data.sg and data.sg.Parent then
+                data.sg:Destroy()
+            end
+            npcEspBoxes[uniqueKey] = nil
+        else
+            local npcHum = npc:FindFirstChildOfClass("Humanoid")
+            local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+            
+            if npcHum and npcRoot and npcHum.Health > 0 then
+                local headPos = npcRoot.Position + Vector3.new(0, 2.8, 0)
+                local feetPos = npcRoot.Position - Vector3.new(0, 3.2, 0)
+                
+                local hSc, hVis = cam:WorldToViewportPoint(headPos)
+                local fSc, fVis = cam:WorldToViewportPoint(feetPos)
+                
+                if hVis and fVis and hSc.Z > 0 and fSc.Z > 0 then
+                    data.box.Visible = true
+                    data.hpBarBg.Visible = true
+                    
+                    local screenH = math.abs(hSc.Y - fSc.Y)
+                    local screenW = screenH * 0.55
+                    
+                    local distance = (cam.CFrame.Position - npcRoot.Position).Magnitude
+                    
+                    if distance > 50 then
+                        local farScale = math.max(0.3, 1 - (distance - 50) / 300)
+                        screenH = screenH * farScale
+                        screenW = screenW * farScale
+                    end
+                    
+                    screenH = math.max(screenH, 10)
+                    screenW = math.max(screenW, 6)
+                    
+                    data.nameText.Visible = distance > 13
+                    data.distText.Visible = distance > 13
+                    
+                    local cx = hSc.X
+                    local topY = math.min(hSc.Y, fSc.Y)
+                    local leftX = cx - screenW * 0.5
+                    local rightX = cx + screenW * 0.5
+                    local barW = math.max(2, math.floor(screenW * 0.08))
+                    
+                    data.box.Position = UDim2.new(0, leftX, 0, topY)
+                    data.box.Size = UDim2.new(0, screenW, 0, screenH)
+                    data.hpBarBg.Position = UDim2.new(0, rightX + 2, 0, topY)
+                    data.hpBarBg.Size = UDim2.new(0, barW, 0, screenH)
+                    
+                    local nameSize = math.clamp(math.floor(screenH * 0.08), 6, 12)
+                    data.nameText.TextSize = nameSize
+                    data.distText.TextSize = nameSize
+                    data.distText.Position = UDim2.new(0.5, 0, 0, -(nameSize + 4))
+                    
+                    local hpSize = math.clamp(math.floor(screenH * 0.1), 6, 14)
+                    data.hpText.TextSize = hpSize
+                    data.hpText.Size = UDim2.new(0, math.max(screenW - 4, 20), 0, hpSize + 2)
+                    data.hpText.Position = UDim2.new(1, -2, 1, -2)
+                    
+                    local hp = math.clamp(npcHum.Health, 0, npcHum.MaxHealth)
+                    local mx = math.max(npcHum.MaxHealth, 1)
+                    local pct = hp / mx
+                    
+                    data.hpFill.Size = UDim2.new(1, 0, pct, 0)
+                    data.hpFill.Position = UDim2.new(0, 0, 1 - pct, 0)
+                    
+                    data.hpFill.BackgroundColor3 = Color3.new(
+                        math.clamp(2*(1-pct), 0, 1),
+                        math.clamp(2*pct, 0, 1),
+                        0
+                    )
+                    
+                    data.hpText.Text = math.floor(pct*100) .. "%"
+                    data.distText.Text = tostring(math.floor(distance))
+                else
+                    data.box.Visible = false
+                    data.hpBarBg.Visible = false
+                end
+            else
+                data.box.Visible = false
+                data.hpBarBg.Visible = false
+            end
+        end
+    end
+end
+
+local function startNpcEspLoop()
+    if AuraS.npcEspConn then
+        AuraS.npcEspConn:Disconnect()
+        AuraS.npcEspConn = nil
+    end
+    
+    AuraS.npcEspConn = RunService.RenderStepped:Connect(function()
+        updateAllNpcEsp()
+    end)
 end
 
 local function startAura()
     if AuraS.active then return end
-    if not S.abuseMode then return end
     
     local hitEvent = getHitEvent()
     if not hitEvent then return end
     
     AuraS.active = true
-    
-    AuraS.npcEspConn = RunService.RenderStepped:Connect(function()
-        if not AuraS.active then
-            clearNpcEsp()
-            return
-        end
-        
-        -- Si ignoreNpcs está activo, no mostrar ESP de NPCs
-        if S.ignoreNpcs then
-            clearNpcEsp()
-            return
-        end
-        
-        local allNpcs = getAllNpcs()
-        local cam = workspace.CurrentCamera
-        if not cam then return end
-        
-        for key, npc in pairs(allNpcs) do
-            local npcHum = npc:FindFirstChildOfClass("Humanoid")
-            if npcHum and npcHum.Health > 0 then
-                if not npcEspBoxes[key] then
-                    createNpcEsp(npc)
-                end
-            end
-        end
-        
-        for name, data in pairs(npcEspBoxes) do
-            local npc = nil
-            for key, n in pairs(allNpcs) do
-                if key == name or n.Name == name then
-                    npc = n
-                    break
-                end
-            end
-            
-            if not npc or not npc.Parent then
-                if data.sg and data.sg.Parent then
-                    data.sg:Destroy()
-                end
-                npcEspBoxes[name] = nil
-            else
-                local npcHum = npc:FindFirstChildOfClass("Humanoid")
-                local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
-                if npcHum and npcRoot and npcHum.Health > 0 then
-                    local headPos = npcRoot.Position + Vector3.new(0, 2.8, 0)
-                    local feetPos = npcRoot.Position - Vector3.new(0, 3.2, 0)
-                    
-                    local hSc, hVis = cam:WorldToViewportPoint(headPos)
-                    local fSc, fVis = cam:WorldToViewportPoint(feetPos)
-                    
-                    if hVis and fVis and hSc.Z > 0 and fSc.Z > 0 then
-                        data.box.Visible = true
-                        data.hpBarBg.Visible = true
-                        
-                        local screenH = math.abs(hSc.Y - fSc.Y)
-                        local screenW = screenH * 0.55
-                        
-                        screenH = math.max(screenH, 10)
-                        screenW = math.max(screenW, 6)
-                        
-                        local cx = hSc.X
-                        local topY = math.min(hSc.Y, fSc.Y)
-                        local leftX = cx - screenW * 0.5
-                        local rightX = cx + screenW * 0.5
-                        local barW = math.max(2, math.floor(screenW * 0.08))
-                        
-                        data.box.Position = UDim2.new(0, leftX, 0, topY)
-                        data.box.Size = UDim2.new(0, screenW, 0, screenH)
-                        data.hpBarBg.Position = UDim2.new(0, rightX + 2, 0, topY)
-                        data.hpBarBg.Size = UDim2.new(0, barW, 0, screenH)
-                        
-                        local hp = math.clamp(npcHum.Health, 0, npcHum.MaxHealth)
-                        local mx = math.max(npcHum.MaxHealth, 1)
-                        local pct = hp / mx
-                        
-                        data.hpFill.Size = UDim2.new(1, 0, pct, 0)
-                        data.hpFill.Position = UDim2.new(0, 0, 1 - pct, 0)
-                        data.hpFill.BackgroundColor3 = Color3.new(
-                            math.clamp(2*(1-pct), 0, 1),
-                            math.clamp(2*pct, 0, 1),
-                            0
-                        )
-                    else
-                        data.box.Visible = false
-                        data.hpBarBg.Visible = false
-                    end
-                else
-                    data.box.Visible = false
-                    data.hpBarBg.Visible = false
-                end
-            end
-        end
-    end)
     
     AuraS.loopConn = RunService.RenderStepped:Connect(function()
         if not AuraS.active then
@@ -1962,7 +2061,7 @@ local function startAura()
         if not playerHead or not playerHead:IsA("BasePart") then return end
         
         local allNpcs = getAllNpcs()
-        for key, npc in pairs(allNpcs) do
+        for _, npc in pairs(allNpcs) do
             pcall(function()
                 local humanoid = npc:FindFirstChildOfClass("Humanoid")
                 if humanoid and humanoid.Health > 0 then
@@ -1988,11 +2087,6 @@ local function stopAura()
         AuraS.loopConn:Disconnect()
         AuraS.loopConn = nil
     end
-    if AuraS.npcEspConn then
-        AuraS.npcEspConn:Disconnect()
-        AuraS.npcEspConn = nil
-    end
-    clearNpcEsp()
 end
 
 local function toggleAura()
@@ -2094,7 +2188,6 @@ titleLabel.TextColor3             = C.TEXT
 titleLabel.TextXAlignment         = Enum.TextXAlignment.Left
 titleLabel.Parent                 = titleBar
 
--- Player count label
 local playerCountLabel = Instance.new("TextLabel")
 playerCountLabel.BackgroundTransparency = 1
 playerCountLabel.Position = UDim2.new(1,-75,0,8)
@@ -3490,9 +3583,10 @@ local function execCmd(raw)
         end
     elseif cmd == "playercount" or cmd == "pcount" then
         S.showPlayerCount = not S.showPlayerCount
+        playerCountGui.Enabled = S.showPlayerCount
+        updatePlayerCountColor()
     elseif cmd == "ignorenpcs" or cmd == "nonpcs" or cmd == "npcsoff" then
         S.ignoreNpcs = true
-        clearNpcEsp()
     elseif cmd == "unignorenpcs" or cmd == "npcs" or cmd == "npcson" then
         S.ignoreNpcs = false
     end
@@ -3696,17 +3790,15 @@ end)
 -- PLAYER JOIN ALERTS
 -- ============================================================
 Players.PlayerAdded:Connect(function(plr)
-    -- Update player count label
     playerCountLabel.Text = #Players:GetPlayers() .. " players"
     
-    -- Show flash and play sound ONLY if showPlayerCount is active
-    if S.showPlayerCount and plr ~= lp then
+    if S.showPlayerCount then
+        updatePlayerCountColor()
         local isFriendJoin = isFriend(plr)
         showFlash(isFriendJoin)
         playPlayerJoinSound()
     end
     
-    -- ESP for new player if enabled
     if S.ESPenabled then
         makeESP(plr)
         playerAddedConns[plr.Name] = plr.CharacterAdded:Connect(function()
@@ -3720,8 +3812,11 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
-    -- Update player count label
     playerCountLabel.Text = (#Players:GetPlayers() - 1) .. " players"
+    
+    if S.showPlayerCount then
+        updatePlayerCountColor()
+    end
     
     clearESP(plr)
     soloESPPlayers[plr.Name] = nil
@@ -3732,12 +3827,16 @@ Players.PlayerRemoving:Connect(function(plr)
     if S.viewing == plr then stopView() end
 end)
 
--- Update player count on initial load
 task.spawn(function()
     while true do
         if playerCountLabel and playerCountLabel.Parent then
             playerCountLabel.Text = #Players:GetPlayers() .. " players"
         end
+        if S.showPlayerCount then
+            updatePlayerCountColor()
+        end
         task.wait(1)
     end
 end)
+
+startNpcEspLoop()
