@@ -60,8 +60,6 @@ local S = {
     cameraRot = Vector2.new(),
     cameraFov = 70,
     cameraWasVisible = true,
-    savedCharCF = nil,
-    freezeConn = nil,
 }
 
 local T = {
@@ -76,6 +74,8 @@ local AuraS = {
     active = false,
     reach = 21,
     loopConn = nil,
+    npcEspConn = nil,
+    aimPart = "Head",
 }
 
 local FlyS = {
@@ -108,6 +108,7 @@ local espLoops = {}
 local soloESPPlayers = {}
 local playerAddedConns = {}
 local _viewConns = {}
+local npcEspBoxes = {}
 
 local function isFriend(plr)
     if plr == lp then return false end
@@ -585,24 +586,6 @@ do
         
         S.cameraWasVisible = UserInputService.MouseIconEnabled
         
-        local char = lp.Character
-        if char then
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if root then S.savedCharCF = root.CFrame end
-        end
-        
-        S.freezeConn = RunService.RenderStepped:Connect(function()
-            if not S.fcRunning then
-                if S.freezeConn then S.freezeConn:Disconnect(); S.freezeConn = nil end
-                return
-            end
-            local c = lp.Character
-            if c and S.savedCharCF then
-                local r = c:FindFirstChild("HumanoidRootPart")
-                if r then r.CFrame = S.savedCharCF end
-            end
-        end)
-        
         Camera.FieldOfView = 70
         Camera.CameraType = Enum.CameraType.Scriptable
         UserInputService.MouseIconEnabled = true
@@ -621,9 +604,6 @@ do
         task.delay(0.1, function()
             if not S.fcRunning then UserInputService.MouseBehavior = mb end
         end)
-        
-        if S.freezeConn then S.freezeConn:Disconnect(); S.freezeConn = nil end
-        S.savedCharCF = nil
     end
 end
 
@@ -1552,6 +1532,103 @@ local function getNPCCustomFolder()
     return ok and folder or nil
 end
 
+local function getAuraTargetPart(npc)
+    local partName = AuraS.aimPart
+    
+    if partName == "Head" then
+        local head = npc:FindFirstChild("Head")
+        if head and head:IsA("BasePart") then return head end
+        local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+        if torso and torso:IsA("BasePart") then return torso end
+        return nil
+    elseif partName == "Torso" then
+        local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+        if torso and torso:IsA("BasePart") then return torso end
+        return nil
+    elseif partName == "Arms" then
+        local leftArm = npc:FindFirstChild("Left Arm") or npc:FindFirstChild("LeftHand")
+        local rightArm = npc:FindFirstChild("Right Arm") or npc:FindFirstChild("RightHand")
+        if leftArm and leftArm:IsA("BasePart") then return leftArm end
+        if rightArm and rightArm:IsA("BasePart") then return rightArm end
+        local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+        if torso and torso:IsA("BasePart") then return torso end
+        return nil
+    elseif partName == "Legs" then
+        local leftLeg = npc:FindFirstChild("Left Leg") or npc:FindFirstChild("LeftFoot")
+        local rightLeg = npc:FindFirstChild("Right Leg") or npc:FindFirstChild("RightFoot")
+        if leftLeg and leftLeg:IsA("BasePart") then return leftLeg end
+        if rightLeg and rightLeg:IsA("BasePart") then return rightLeg end
+        local torso = npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+        if torso and torso:IsA("BasePart") then return torso end
+        return nil
+    end
+    
+    return nil
+end
+
+local function clearNpcEsp()
+    for name, data in pairs(npcEspBoxes) do
+        if data.sg and data.sg.Parent then
+            data.sg:Destroy()
+        end
+        npcEspBoxes[name] = nil
+    end
+end
+
+local function createNpcEsp(npc)
+    if npcEspBoxes[npc.Name] then return end
+    
+    local sg = Instance.new("ScreenGui")
+    sg.Name = npc.Name .. "_NPC_ESP"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.DisplayOrder = 998
+    sg.Parent = PARENT
+
+    local box = Instance.new("Frame")
+    box.BackgroundTransparency = 1
+    box.BorderSizePixel = 0
+    box.ZIndex = 2
+    box.Parent = sg
+
+    local thick = 1
+    local espColor = Color3.fromRGB(255, 60, 60)
+    
+    local t = Instance.new("Frame")
+    t.BackgroundColor3 = espColor; t.BackgroundTransparency = 0.3; t.BorderSizePixel = 0; t.ZIndex = 3
+    t.Position = UDim2.new(0,0,0,0); t.Size = UDim2.new(1,0,0,thick); t.Parent = box
+
+    local b = Instance.new("Frame")
+    b.BackgroundColor3 = espColor; b.BackgroundTransparency = 0.3; b.BorderSizePixel = 0; b.ZIndex = 3
+    b.Position = UDim2.new(0,0,1,-thick); b.Size = UDim2.new(1,0,0,thick); b.Parent = box
+
+    local l = Instance.new("Frame")
+    l.BackgroundColor3 = espColor; l.BackgroundTransparency = 0.3; l.BorderSizePixel = 0; l.ZIndex = 3
+    l.Position = UDim2.new(0,0,0,0); l.Size = UDim2.new(0,thick,1,0); l.Parent = box
+
+    local r = Instance.new("Frame")
+    r.BackgroundColor3 = espColor; r.BackgroundTransparency = 0.3; r.BorderSizePixel = 0; r.ZIndex = 3
+    r.Position = UDim2.new(1,-thick,0,0); r.Size = UDim2.new(0,thick,1,0); r.Parent = box
+
+    local hpBarBg = Instance.new("Frame")
+    hpBarBg.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    hpBarBg.BackgroundTransparency = 0.3
+    hpBarBg.BorderSizePixel = 0
+    hpBarBg.ZIndex = 2
+    hpBarBg.Parent = sg
+
+    local hpFill = Instance.new("Frame")
+    hpFill.BackgroundColor3 = Color3.fromRGB(80, 220, 80)
+    hpFill.BorderSizePixel = 0
+    hpFill.AnchorPoint = Vector2.new(0,0)
+    hpFill.Position = UDim2.new(0,0,0,0)
+    hpFill.Size = UDim2.new(1,0,1,0)
+    hpFill.ZIndex = 3
+    hpFill.Parent = hpBarBg
+
+    npcEspBoxes[npc.Name] = {sg = sg, box = box, hpBarBg = hpBarBg, hpFill = hpFill}
+end
+
 local function startAura()
     if AuraS.active then return end
     
@@ -1562,6 +1639,95 @@ local function startAura()
     if not npcFolder then return end
     
     AuraS.active = true
+    
+    AuraS.npcEspConn = RunService.RenderStepped:Connect(function()
+        if not AuraS.active then
+            clearNpcEsp()
+            return
+        end
+        
+        local folder = getNPCCustomFolder()
+        if not folder then
+            clearNpcEsp()
+            return
+        end
+        
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        
+        local validNpcs = {}
+        for _, npc in pairs(folder:GetChildren()) do
+            if npc:IsA("Model") then
+                local npcHum = npc:FindFirstChildOfClass("Humanoid")
+                if npcHum and npcHum.Health > 0 then
+                    validNpcs[npc.Name] = npc
+                    if not npcEspBoxes[npc.Name] then
+                        createNpcEsp(npc)
+                    end
+                end
+            end
+        end
+        
+        for name, data in pairs(npcEspBoxes) do
+            local npc = validNpcs[name]
+            if not npc then
+                if data.sg and data.sg.Parent then
+                    data.sg:Destroy()
+                end
+                npcEspBoxes[name] = nil
+            else
+                local npcHum = npc:FindFirstChildOfClass("Humanoid")
+                local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc:FindFirstChild("UpperTorso")
+                if npcHum and npcRoot and npcHum.Health > 0 then
+                    local headPos = npcRoot.Position + Vector3.new(0, 2.8, 0)
+                    local feetPos = npcRoot.Position - Vector3.new(0, 3.2, 0)
+                    
+                    local hSc, hVis = cam:WorldToViewportPoint(headPos)
+                    local fSc, fVis = cam:WorldToViewportPoint(feetPos)
+                    
+                    if hVis and fVis and hSc.Z > 0 and fSc.Z > 0 then
+                        data.box.Visible = true
+                        data.hpBarBg.Visible = true
+                        
+                        local screenH = math.abs(hSc.Y - fSc.Y)
+                        local screenW = screenH * 0.55
+                        
+                        screenH = math.max(screenH, 10)
+                        screenW = math.max(screenW, 6)
+                        
+                        local cx = hSc.X
+                        local topY = math.min(hSc.Y, fSc.Y)
+                        local leftX = cx - screenW * 0.5
+                        local rightX = cx + screenW * 0.5
+                        local barW = math.max(2, math.floor(screenW * 0.08))
+                        
+                        data.box.Position = UDim2.new(0, leftX, 0, topY)
+                        data.box.Size = UDim2.new(0, screenW, 0, screenH)
+                        data.hpBarBg.Position = UDim2.new(0, rightX + 2, 0, topY)
+                        data.hpBarBg.Size = UDim2.new(0, barW, 0, screenH)
+                        
+                        local hp = math.clamp(npcHum.Health, 0, npcHum.MaxHealth)
+                        local mx = math.max(npcHum.MaxHealth, 1)
+                        local pct = hp / mx
+                        
+                        data.hpFill.Size = UDim2.new(1, 0, pct, 0)
+                        data.hpFill.Position = UDim2.new(0, 0, 1 - pct, 0)
+                        data.hpFill.BackgroundColor3 = Color3.new(
+                            math.clamp(2*(1-pct), 0, 1),
+                            math.clamp(2*pct, 0, 1),
+                            0
+                        )
+                    else
+                        data.box.Visible = false
+                        data.hpBarBg.Visible = false
+                    end
+                else
+                    data.box.Visible = false
+                    data.hpBarBg.Visible = false
+                end
+            end
+        end
+    end)
     
     AuraS.loopConn = RunService.RenderStepped:Connect(function()
         if not AuraS.active then
@@ -1594,14 +1760,14 @@ local function startAura()
             pcall(function()
                 local humanoid = npc:FindFirstChildOfClass("Humanoid")
                 if humanoid and humanoid.Health > 0 then
-                    local head = npc:FindFirstChild("Head")
-                    if head and head:IsA("BasePart") then
-                        if (playerHead.Position - head.Position).Magnitude <= AuraS.reach then
+                    local targetPart = getAuraTargetPart(npc)
+                    if targetPart and targetPart:IsA("BasePart") then
+                        if (playerHead.Position - targetPart.Position).Magnitude <= AuraS.reach then
                             local swingEv = getSwingEvent()
                             if swingEv then
                                 pcall(function() swingEv:InvokeServer() end)
                             end
-                            ev:FireServer(head, head.Position)
+                            ev:FireServer(targetPart, targetPart.Position)
                         end
                     end
                 end
@@ -1616,6 +1782,11 @@ local function stopAura()
         AuraS.loopConn:Disconnect()
         AuraS.loopConn = nil
     end
+    if AuraS.npcEspConn then
+        AuraS.npcEspConn:Disconnect()
+        AuraS.npcEspConn = nil
+    end
+    clearNpcEsp()
 end
 
 local function toggleAura()
@@ -1628,6 +1799,22 @@ end
 
 local function setAuraReach(n)
     AuraS.reach = math.clamp(tonumber(n) or 21, 1, 30)
+end
+
+local function setAuraPart(partName)
+    local validParts = {"head", "torso", "arms", "legs"}
+    local lowerPart = partName:lower()
+    for _, valid in ipairs(validParts) do
+        if lowerPart:sub(1, #valid) == valid then
+            if valid == "head" then AuraS.aimPart = "Head"
+            elseif valid == "torso" then AuraS.aimPart = "Torso"
+            elseif valid == "arms" then AuraS.aimPart = "Arms"
+            elseif valid == "legs" then AuraS.aimPart = "Legs"
+            end
+            return true
+        end
+    end
+    return false
 end
 
 local function setToggleAuraKey(keyName)
@@ -1801,7 +1988,7 @@ end)
 UserInputService.InputChanged:Connect(function(i)
     if S.dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
         local d = i.Position - S.dragStart
-        gui.Position = UDim2.new(S.startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
+        gui.Position = UDim2.new(S.startPos.X.Scale, S.startPos.X.Offset+d.X, S.startPos.Y.Scale, S.startPos.Y.Offset+d.Y)
     end
 end)
 
@@ -2407,6 +2594,7 @@ local ABUSE_COMMANDS = {
     {"aura / toggleaura",  "Auto-melee NPCs in range"},
     {"noaura / unaura",    "Stop aura"},
     {"aurareach n",        "Set aura range (1-30, default 21)"},
+    {"aurapart [part]",    "Set aura aim part (head/torso/arms/legs)"},
     {"toggleaurakey [key]","Bind key to toggle aura"},
     {"untoggleaura",       "Remove aura toggle key"},
     {"rspy / remotespy",   "Load Cobalt remote spy"},
@@ -2767,11 +2955,11 @@ local cmdHints = {
     end},
     {p="^aura%s*$", h=function()
         if not S.abuseMode then return "Requires abuse mode" end
-        return AuraS.active and "Stop aura" or "Start aura (range: "..AuraS.reach..")"
+        return AuraS.active and "Stop aura" or "Start aura (range: "..AuraS.reach..", part: "..AuraS.aimPart..")"
     end},
     {p="^toggleaura%s*$", h=function()
         if not S.abuseMode then return "Requires abuse mode" end
-        return AuraS.active and "Stop aura" or "Start aura (range: "..AuraS.reach..")"
+        return AuraS.active and "Stop aura" or "Start aura (range: "..AuraS.reach..", part: "..AuraS.aimPart..")"
     end},
     {p="^noaura%s*$", h=function()
         if not S.abuseMode then return "Requires abuse mode" end
@@ -2793,6 +2981,14 @@ local cmdHints = {
     {p="^aurareach%s*$", h=function()
         if not S.abuseMode then return "Requires abuse mode" end
         return string.format("aurareach [1-30]  (current: %d, default: 21, max: 30)", AuraS.reach)
+    end},
+    {p="^aurapart%s+(%S+)", h=function(m)
+        if not S.abuseMode then return "Requires abuse mode" end
+        return "Set aura aim part to: "..m.." (head/torso/arms/legs)"
+    end},
+    {p="^aurapart%s*$", h=function()
+        if not S.abuseMode then return "Requires abuse mode" end
+        return "aurapart [head/torso/arms/legs]  (current: "..AuraS.aimPart..")"
     end},
     {p="^rspy%s*$", h=function()
         if not S.abuseMode then return "Requires abuse mode" end
@@ -3017,6 +3213,11 @@ local function execCmd(raw)
         local v = tonumber(arg1)
         if v then
             setAuraReach(v)
+        end
+    elseif cmd == "aurapart" then
+        if not S.abuseMode then return end
+        if arg1 then
+            setAuraPart(arg1)
         end
     elseif cmd == "rspy" or cmd == "remotespy" then
         if not S.abuseMode then return end
