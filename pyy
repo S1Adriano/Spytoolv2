@@ -64,7 +64,7 @@ local S = {
     cameraWasVisible = true,
     savedCameraCF = nil,
     savedCameraFocus = nil,
-    showPlayerCount = true,
+    showPlayerCount = false,
     ignoreNpcs = false,
 }
 
@@ -3638,12 +3638,14 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-
+-- ============================================================
+-- PLAYER JOIN ALERTS
+-- ============================================================
 Players.PlayerAdded:Connect(function(plr)
     -- Update player count label
     playerCountLabel.Text = #Players:GetPlayers() .. " players"
     
-    -- Show flash and play sound
+    -- Show flash and play sound ONLY if showPlayerCount is active
     if S.showPlayerCount and plr ~= lp then
         local isFriendJoin = isFriend(plr)
         showFlash(isFriendJoin)
@@ -3657,7 +3659,7 @@ Players.PlayerAdded:Connect(function(plr)
             task.wait(0.3)
             if S.ESPenabled then
                 task.wait(0.3)
-                if S.ESPEnabled then makeESP(plr) end
+                if S.ESPenabled then makeESP(plr) end
             end
         end)
     end
