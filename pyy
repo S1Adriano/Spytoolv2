@@ -62,7 +62,7 @@ savedCameraCF = nil,
 savedCameraFocus = nil,
 showPlayerCount = false,
 ignoreNpcs = false,
-npcEspEnabled = false, -- CORREGIDO: Controla explícitamente si el ESP de NPCs está activo
+npcEspEnabled = false,
 fcFreezeConn = nil,
 }
 local T = {
@@ -111,9 +111,6 @@ local playerAddedConns = {}
 local _viewConns = {}
 local npcEspBoxes = {}
 local showNotify
--- ============================================================
--- PLAYER COUNT / JOIN ALERT
--- ============================================================
 local PLAYER_JOIN_SOUND_ID = "rbxassetid://130406186928352"
 local flashGui = Instance.new("ScreenGui")
 flashGui.Name = "FlashGui"
@@ -955,10 +952,17 @@ return ok
 end
 local function startWalkfling()
 if S.walkflingActive then return end
+S.walkflingActive = true
 local char = lp.Character
-if not char then return end
+if not char then
+S.walkflingActive = false
+return
+end
 local hum = char:FindFirstChildWhichIsA("Humanoid")
-if not hum then return end
+if not hum then
+S.walkflingActive = false
+return
+end
 S.walkflingNoclipConn = RunService.Stepped:Connect(function()
 local c = lp.Character
 if not c then return end
@@ -968,7 +972,6 @@ v.CanCollide = false
 end
 end
 end)
-S.walkflingActive = true
 S.walkflingThread = task.spawn(function()
 repeat RunService.Heartbeat:Wait()
 local character = lp.Character
@@ -1468,9 +1471,6 @@ end)
 end)
 return ok
 end
--- ============================================================
--- REMOTES CACHEADOS 1 SOLA VEZ (sin pcall por frame)
--- ============================================================
 local MeleeEvents = { Hit = nil, Swing = nil }
 local function cacheMeleeEvents()
 local ms = ReplicatedStorage:FindFirstChild("MeleeStorage")
@@ -1483,9 +1483,6 @@ end
 end
 end
 cacheMeleeEvents()
--- ============================================================
--- NPC PATHS
--- ============================================================
 local NPC_PATHS = {
 {"NPCs", "Hostile"},
 {"ActiveTasks", "Location"},
@@ -1494,23 +1491,18 @@ local NPC_PATHS = {
 {"WaveSurvival", "NPCs"},
 {"NPCs", "Custom"},
 }
--- ============================================================
--- SCAN DE NPCs: 1 SOLA VEZ + COOLDOWN, NUNCA GetDescendants
--- ============================================================
-local NPC_SCAN_COOLDOWN = 1 -- segundos entre scans
+local NPC_SCAN_COOLDOWN = 1
 local npcCache = {
-list = {},        -- lista de entries {model, hum, root, part}
+list = {},
 lastScan = -math.huge,
 aimPartCached = nil,
 }
--- recursion con GetChildren (nunca GetDescendants)
 local function collectNpcsRecursive(folder, out)
 for _, child in ipairs(folder:GetChildren()) do
 if child:IsA("Model") then
 local h = child:FindFirstChildWhichIsA("Humanoid", true)
 if h then
 out[child] = true
--- no entrar al modelo (el rig interno es del mismo NPC)
 else
 collectNpcsRecursive(child, out)
 end
@@ -1600,19 +1592,15 @@ end
 return npcCache.list
 end
 local function clearNpcEsp()
-for name, data in pairs(npcEspBoxes) do
+for npc, data in pairs(npcEspBoxes) do
 if data.sg and data.sg.Parent then
 data.sg:Destroy()
 end
-npcEspBoxes[name] = nil
+npcEspBoxes[npc] = nil
 end
 end
--- ============================================================
--- NPC ESP - CAJA ROJA, MISMO FORMATO QUE PLAYERS (usa cache)
--- ============================================================
 local function createNpcEsp(npc)
-local uniqueKey = npc:GetFullName()
-if npcEspBoxes[uniqueKey] then return end
+if npcEspBoxes[npc] then return end
 local sg = Instance.new("ScreenGui")
 sg.Name = npc.Name .. "_NPC_ESP"
 sg.ResetOnSpawn = false
@@ -1695,10 +1683,9 @@ hpFill.Position = UDim2.new(0,0,0,0)
 hpFill.Size = UDim2.new(1,0,1,0)
 hpFill.ZIndex = 3
 hpFill.Parent = hpBarBg
-npcEspBoxes[uniqueKey] = {sg = sg, box = box, hpBarBg = hpBarBg, hpFill = hpFill, distText = distText, nameText = nameText, hpText = hpText, npc = npc}
+npcEspBoxes[npc] = {sg = sg, box = box, hpBarBg = hpBarBg, hpFill = hpFill, distText = distText, nameText = nameText, hpText = hpText, npc = npc}
 end
 local function updateAllNpcEsp()
--- CORREGIDO: Ahora depende exclusivamente de S.npcEspEnabled, no de S.ESPenabled
 if not S.npcEspEnabled then
 clearNpcEsp()
 return
@@ -1706,24 +1693,22 @@ end
 local allNpcs = getCachedNpcs()
 local cam = workspace.CurrentCamera
 if not cam then return end
-local validKeys = {}
+local validNpcs = {}
 for _, entry in pairs(allNpcs) do
 local npc = entry.model
-local uniqueKey = npc:GetFullName()
-validKeys[uniqueKey] = true
+validNpcs[npc] = true
 if entry.hum and entry.hum.Health > 0 then
-if not npcEspBoxes[uniqueKey] then
+if not npcEspBoxes[npc] then
 createNpcEsp(npc)
 end
 end
 end
-for uniqueKey, data in pairs(npcEspBoxes) do
-local npc = data.npc
-if not validKeys[uniqueKey] or not npc or not npc.Parent then
+for npc, data in pairs(npcEspBoxes) do
+if not validNpcs[npc] or not npc or not npc.Parent then
 if data.sg and data.sg.Parent then
 data.sg:Destroy()
 end
-npcEspBoxes[uniqueKey] = nil
+npcEspBoxes[npc] = nil
 else
 local npcHum = npc:FindFirstChildWhichIsA("Humanoid", true)
 local npcRoot = npc:FindFirstChild("HumanoidRootPart", true) or npc:FindFirstChild("Torso", true) or npc:FindFirstChild("UpperTorso", true)
@@ -1796,9 +1781,6 @@ AuraS.npcEspConn = RunService.RenderStepped:Connect(function()
 updateAllNpcEsp()
 end)
 end
--- ============================================================
--- AURA CON "PULL" - usa cache (sin scan por frame, sin lag)
--- ============================================================
 local function getAuraHitPosition(partPos, playerHeadPos, distance)
 if distance <= AuraS.pullStart then
 return partPos
@@ -1809,15 +1791,14 @@ return partPos + dirToMe * pull
 end
 local function startAura()
 if AuraS.active then return end
-cacheMeleeEvents()
--- CORREGIDO: Se establece active = true ANTES de cualquier retorno temprano
--- para evitar que el toggle se desincronice y diga "ON" pero no haga nada.
 AuraS.active = true
+cacheMeleeEvents()
 if not MeleeEvents.Hit then
 if showNotify then showNotify("Aura: Error (No Hit Event)", C.REJECT) end
 AuraS.active = false
 return
 end
+if showNotify then showNotify("Aura: ON", C.ABUSE) end
 AuraS.loopConn = RunService.RenderStepped:Connect(function()
 if not AuraS.active then
 if AuraS.loopConn then
@@ -1865,8 +1846,6 @@ AuraS.loopConn = nil
 end
 end
 local function toggleAura()
-if not S.abuseMode then return end
--- CORREGIDO: Lógica de toggle simplificada y fiable
 if AuraS.active then
 stopAura()
 if showNotify then showNotify("Aura: OFF", C.SUBTEXT) end
@@ -3070,13 +3049,13 @@ end},
 return not S.npcEspEnabled and "NPC ESP already hidden" or "Hide NPC ESP boxes"
 end},
 {p="^unignorenpcs%s*$", h=function()
-return S.npcEspEnabled and "Show NPC ESP boxes" or "NPC ESP already visible"
+return S.npcEspEnabled and "NPC ESP already visible" or "Show NPC ESP boxes"
 end},
 {p="^npcs%s*$", h=function()
-return S.npcEspEnabled and "Show NPC ESP boxes" or "NPC ESP already visible"
+return S.npcEspEnabled and "NPC ESP already visible" or "Show NPC ESP boxes"
 end},
 {p="^npcson%s*$", h=function()
-return S.npcEspEnabled and "Show NPC ESP boxes" or "NPC ESP already visible"
+return S.npcEspEnabled and "NPC ESP already visible" or "Show NPC ESP boxes"
 end},
 }
 local function getHint(text)
@@ -3244,15 +3223,13 @@ doIA()
 elseif cmd == "vanehub" then
 if not S.abuseMode then return end
 print("coming soon")
--- CORREGIDO: Separación explícita de comandos de aura para evitar comportamiento errático del toggle
 elseif cmd == "aura" then
 if not S.abuseMode then return end
 startAura()
-if showNotify then showNotify("Aura: ON", C.ABUSE) end
 elseif cmd == "noaura" or cmd == "unaura" then
 if not S.abuseMode then return end
 stopAura()
-if showNotify then showNotify("Aura: OFF", C.SUBTEXT) end
+showNotify("Aura: OFF", C.SUBTEXT)
 elseif cmd == "toggleaura" then
 if not S.abuseMode then return end
 toggleAura()
@@ -3302,7 +3279,6 @@ S.showPlayerCount = not S.showPlayerCount
 playerCountGui.Enabled = S.showPlayerCount
 updatePlayerCountColor()
 showNotify(S.showPlayerCount and "Player Count: ON" or "Player Count: OFF", S.showPlayerCount and C.SUCCESS or C.SUBTEXT)
--- CORREGIDO: Los comandos de NPCs ahora controlan S.npcEspEnabled
 elseif cmd == "ignorenpcs" or cmd == "nonpcs" or cmd == "npcsoff" then
 S.npcEspEnabled = false
 clearNpcEsp()
@@ -3483,9 +3459,6 @@ end
 end
 end
 end)
--- ============================================================
--- PLAYER JOIN ALERTS
--- ============================================================
 Players.PlayerAdded:Connect(function(plr)
 playerCountLabel.Text = #Players:GetPlayers() .. " players"
 if S.showPlayerCount then
@@ -3529,4 +3502,28 @@ end
 task.wait(1)
 end
 end)
+local function onCharacterDied()
+if FlyS.flying then
+stopFly()
+end
+if AuraS.active then
+stopAura()
+end
+if S.walkflingActive then
+stopWalkfling()
+end
+end
+local function setupDeathListener()
+local char = lp.Character
+if not char then return end
+local hum = char:FindFirstChildOfClass("Humanoid")
+if hum then
+hum.Died:Connect(onCharacterDied)
+end
+end
+lp.CharacterAdded:Connect(function(char)
+task.wait(0.5)
+setupDeathListener()
+end)
+setupDeathListener()
 startNpcEspLoop()
