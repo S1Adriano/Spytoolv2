@@ -119,11 +119,10 @@ local playerAddedConns = {}
 local _viewConns = {}
 local npcEspBoxes = {}
 
--- forward declaration (se asigna despues de crear execLabel)
 local showNotify
 
 -- ============================================================
--- PLAYER COUNT / JOIN ALERT SYSTEM
+-- PLAYER COUNT / JOIN ALERT
 -- ============================================================
 local PLAYER_JOIN_SOUND_ID = "rbxassetid://130406186928352"
 
@@ -188,15 +187,11 @@ end
 local function updatePlayerCountColor()
     local count = #Players:GetPlayers()
     countLabel.Text = count .. (count == 1 and " Player" or " Players")
-    
     local enemies = getEnemyCount()
-    
     if enemies > 0 then
         countLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-        
         local originalSize = countLabel.Size
         local bigSize = UDim2.fromOffset(240, 68)
-        
         local tweenBig = TweenService:Create(countLabel, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = bigSize})
         tweenBig:Play()
         tweenBig.Completed:Connect(function()
@@ -206,7 +201,6 @@ local function updatePlayerCountColor()
     else
         countLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
     end
-    
     lastPlayerCount = count
 end
 
@@ -219,25 +213,20 @@ local function playPlayerJoinSound()
         sound.Parent = SoundService
         sound:Play()
         task.delay(5, function()
-            if sound and sound.Parent then
-                sound:Destroy()
-            end
+            if sound and sound.Parent then sound:Destroy() end
         end)
     end)
 end
 
 local function showFlash(isFriendJoin)
     if not S.showPlayerCount then return end
-    
     if isFriendJoin then
         flashFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
     else
         flashFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     end
-    
     flashGui.Enabled = true
     flashFrame.BackgroundTransparency = 0.3
-    
     task.delay(0.3, function()
         local tween = TweenService:Create(flashFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
         tween:Play()
@@ -254,13 +243,9 @@ task.spawn(function()
     preloadSound.Volume = 0.01
     preloadSound.Parent = SoundService
     preloadSound:Play()
-    preloadSound.Ended:Connect(function()
-        preloadSound:Destroy()
-    end)
+    preloadSound.Ended:Connect(function() preloadSound:Destroy() end)
     task.delay(3, function()
-        if preloadSound and preloadSound.Parent then
-            preloadSound:Destroy()
-        end
+        if preloadSound and preloadSound.Parent then preloadSound:Destroy() end
     end)
 end)
 
@@ -1692,23 +1677,21 @@ local function doJerk()
     return ok
 end
 
-local function getHitEvent()
-    local ok, hitEvent = pcall(function()
-        return ReplicatedStorage:FindFirstChild("MeleeStorage")
-            and ReplicatedStorage.MeleeStorage:FindFirstChild("Events")
-            and ReplicatedStorage.MeleeStorage.Events:FindFirstChild("Hit")
-    end)
-    return ok and hitEvent or nil
+-- ============================================================
+-- REMOTES CACHEADOS 1 SOLA VEZ (sin pcall por frame)
+-- ============================================================
+local MeleeEvents = { Hit = nil, Swing = nil }
+local function cacheMeleeEvents()
+    local ms = ReplicatedStorage:FindFirstChild("MeleeStorage")
+    if ms then
+        local ev = ms:FindFirstChild("Events")
+        if ev then
+            if not MeleeEvents.Hit then MeleeEvents.Hit = ev:FindFirstChild("Hit") end
+            if not MeleeEvents.Swing then MeleeEvents.Swing = ev:FindFirstChild("Swing") end
+        end
+    end
 end
-
-local function getSwingEvent()
-    local ok, swingEvent = pcall(function()
-        return ReplicatedStorage:FindFirstChild("MeleeStorage")
-            and ReplicatedStorage.MeleeStorage:FindFirstChild("Events")
-            and ReplicatedStorage.MeleeStorage.Events:FindFirstChild("Swing")
-    end)
-    return ok and swingEvent or nil
-end
+cacheMeleeEvents()
 
 -- ============================================================
 -- NPC PATHS
@@ -1723,8 +1706,33 @@ local NPC_PATHS = {
 }
 
 -- ============================================================
--- GET ALL NPCs (BUSQUEDA RECURSIVA - ENCUENTRA TODOS)
+-- SCAN DE NPCs: 1 SOLA VEZ + COOLDOWN, NUNCA GetDescendants
 -- ============================================================
+local NPC_SCAN_COOLDOWN = 1 -- segundos entre scans
+
+local npcCache = {
+    list = {},        -- lista de entries {model, hum, root, part}
+    lastScan = -math.huge,
+    aimPartCached = nil,
+}
+
+-- recursion con GetChildren (nunca GetDescendants)
+local function collectNpcsRecursive(folder, out)
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("Model") then
+            local h = child:FindFirstChildWhichIsA("Humanoid", true)
+            if h then
+                out[child] = true
+                -- no entrar al modelo (el rig interno es del mismo NPC)
+            else
+                collectNpcsRecursive(child, out)
+            end
+        elseif child:IsA("Folder") then
+            collectNpcsRecursive(child, out)
+        end
+    end
+end
+
 local function findFolders(root, path, index)
     if index > #path then
         return {root}
@@ -1740,50 +1748,6 @@ local function findFolders(root, path, index)
         end
     end
     return found
-end
-
-local function getAllNpcs()
-    local candidates = {}
-    for _, path in ipairs(NPC_PATHS) do
-        local folders = findFolders(workspace, path, 1)
-        for _, folder in ipairs(folders) do
-            -- buscar en TODA la profundidad, no solo hijos directos
-            for _, desc in ipairs(folder:GetDescendants()) do
-                if desc:IsA("Model") and not candidates[desc] then
-                    if desc:FindFirstChildWhichIsA("Humanoid", true) then
-                        candidates[desc] = true
-                    end
-                end
-            end
-        end
-    end
-    
-    -- filtrar modelos anidados (quedarse solo con el modelo principal de cada NPC)
-    local result = {}
-    for model, _ in pairs(candidates) do
-        local nested = false
-        local anc = model.Parent
-        while anc and anc ~= workspace do
-            if candidates[anc] then
-                nested = true
-                break
-            end
-            anc = anc.Parent
-        end
-        if not nested then
-            local h = model:FindFirstChildWhichIsA("Humanoid", true)
-            if h and h.Health > 0 then
-                table.insert(result, model)
-            end
-        end
-    end
-    return result
-end
-
-local function getNpcRoot(npc)
-    return npc:FindFirstChild("HumanoidRootPart", true)
-        or npc:FindFirstChild("Torso", true)
-        or npc:FindFirstChild("UpperTorso", true)
 end
 
 local function getAuraTargetPart(npc)
@@ -1820,6 +1784,44 @@ local function getAuraTargetPart(npc)
     return nil
 end
 
+local function scanNpcs()
+    cacheMeleeEvents()
+    
+    local found = {}
+    for _, path in ipairs(NPC_PATHS) do
+        local folders = findFolders(workspace, path, 1)
+        for _, folder in ipairs(folders) do
+            collectNpcsRecursive(folder, found)
+        end
+    end
+    
+    local list = {}
+    for model, _ in pairs(found) do
+        local h = model:FindFirstChildWhichIsA("Humanoid", true)
+        if h and h.Health > 0 then
+            local root = model:FindFirstChild("HumanoidRootPart", true)
+                or model:FindFirstChild("Torso", true)
+                or model:FindFirstChild("UpperTorso", true)
+            local part = getAuraTargetPart(model) or root
+            table.insert(list, { model = model, hum = h, root = root, part = part })
+        end
+    end
+    
+    npcCache.list = list
+    npcCache.lastScan = os.clock()
+    npcCache.aimPartCached = AuraS.aimPart
+end
+
+local function getCachedNpcs(force)
+    local needRescan = force
+        or (os.clock() - npcCache.lastScan >= NPC_SCAN_COOLDOWN)
+        or (npcCache.aimPartCached ~= AuraS.aimPart)
+    if needRescan then
+        scanNpcs()
+    end
+    return npcCache.list
+end
+
 local function clearNpcEsp()
     for name, data in pairs(npcEspBoxes) do
         if data.sg and data.sg.Parent then
@@ -1830,7 +1832,7 @@ local function clearNpcEsp()
 end
 
 -- ============================================================
--- NPC ESP - CAJA ROJA, MISMO FORMATO QUE PLAYERS
+-- NPC ESP - CAJA ROJA, MISMO FORMATO QUE PLAYERS (usa cache)
 -- ============================================================
 local function createNpcEsp(npc)
     local uniqueKey = npc:GetFullName()
@@ -1849,7 +1851,6 @@ local function createNpcEsp(npc)
     box.ZIndex = 2
     box.Parent = sg
 
-    -- ROJO UN POCO MAS MARCADO
     local espColor = Color3.fromRGB(255, 100, 100)
     local thick = 1
     local currentAlpha = S.espAlpha
@@ -1940,18 +1941,18 @@ local function updateAllNpcEsp()
         return
     end
     
-    local allNpcs = getAllNpcs()
+    local allNpcs = getCachedNpcs()
     local cam = workspace.CurrentCamera
     if not cam then return end
     
     local validKeys = {}
     
-    for _, npc in pairs(allNpcs) do
+    for _, entry in pairs(allNpcs) do
+        local npc = entry.model
         local uniqueKey = npc:GetFullName()
         validKeys[uniqueKey] = true
         
-        local npcHum = npc:FindFirstChildWhichIsA("Humanoid", true)
-        if npcHum and npcHum.Health > 0 then
+        if entry.hum and entry.hum.Health > 0 then
             if not npcEspBoxes[uniqueKey] then
                 createNpcEsp(npc)
             end
@@ -1968,7 +1969,7 @@ local function updateAllNpcEsp()
             npcEspBoxes[uniqueKey] = nil
         else
             local npcHum = npc:FindFirstChildWhichIsA("Humanoid", true)
-            local npcRoot = getNpcRoot(npc)
+            local npcRoot = npc:FindFirstChild("HumanoidRootPart", true) or npc:FindFirstChild("Torso", true) or npc:FindFirstChild("UpperTorso", true)
             
             if npcHum and npcRoot and npcHum.Health > 0 then
                 local headPos = npcRoot.Position + Vector3.new(0, 2.8, 0)
@@ -2058,10 +2059,9 @@ local function startNpcEspLoop()
 end
 
 -- ============================================================
--- AURA CON "PULL" - EL HIT SE ACERCA HACIA TI COMO UN PALO
+-- AURA CON "PULL" - usa cache (sin scan por frame, sin lag)
 -- ============================================================
 local function getAuraHitPosition(partPos, playerHeadPos, distance)
-    -- si esta muy cerca pega exacto, mientras mas lejos mas se acerca el hit hacia ti
     if distance <= AuraS.pullStart then
         return partPos
     end
@@ -2073,8 +2073,8 @@ end
 local function startAura()
     if AuraS.active then return end
     
-    local hitEvent = getHitEvent()
-    if not hitEvent then return end
+    cacheMeleeEvents()
+    if not MeleeEvents.Hit then return end
     
     AuraS.active = true
     
@@ -2087,7 +2087,7 @@ local function startAura()
             return
         end
         
-        local ev = getHitEvent()
+        local ev = MeleeEvents.Hit
         if not ev then
             stopAura()
             return
@@ -2099,26 +2099,26 @@ local function startAura()
         local playerHead = char:FindFirstChild("Head")
         if not playerHead or not playerHead:IsA("BasePart") then return end
         
-        local allNpcs = getAllNpcs()
-        for _, npc in pairs(allNpcs) do
-            pcall(function()
-                local humanoid = npc:FindFirstChildWhichIsA("Humanoid", true)
-                if humanoid and humanoid.Health > 0 then
-                    local targetPart = getAuraTargetPart(npc)
-                    if targetPart and targetPart:IsA("BasePart") then
-                        local partPos = targetPart.Position
-                        local distance = (playerHead.Position - partPos).Magnitude
-                        if distance <= AuraS.reach then
-                            local hitPos = getAuraHitPosition(partPos, playerHead.Position, distance)
-                            local swingEv = getSwingEvent()
-                            if swingEv then
-                                pcall(function() swingEv:InvokeServer() end)
-                            end
-                            ev:FireServer(targetPart, hitPos)
+        -- usa la lista cacheada (scan con cooldown), misma velocidad de pegado
+        local allNpcs = getCachedNpcs()
+        for _, entry in ipairs(allNpcs) do
+            local hum = entry.hum
+            local root = entry.root
+            if hum and hum.Parent and hum.Health > 0 and root and root.Parent then
+                local part = entry.part
+                if part and part:IsA("BasePart") and part.Parent then
+                    local partPos = part.Position
+                    local distance = (playerHead.Position - partPos).Magnitude
+                    if distance <= AuraS.reach then
+                        local hitPos = getAuraHitPosition(partPos, playerHead.Position, distance)
+                        local swingEv = MeleeEvents.Swing
+                        if swingEv then
+                            pcall(function() swingEv:InvokeServer() end)
                         end
+                        ev:FireServer(part, hitPos)
                     end
                 end
-            end)
+            end
         end
     end)
 end
@@ -2323,7 +2323,7 @@ local function setPrefixWaiting(state)
 end
 
 prefixBox.MouseButton1Click:Connect(function()
-    if not S.prefixWaiting then
+    if not prefixWaiting then
         setPrefixWaiting(true)
     else
         S.prefix = S.defaultPrefix
@@ -2759,9 +2759,6 @@ execLabel.Visible = false
 execLabel.ZIndex = 10
 execLabel.Parent = gui
 
--- ============================================================
--- NOTIFICACIONES EN PANTALLA PARA LOS TOGGLES
--- ============================================================
 showNotify = function(text, color)
     if S.execLabelTween then
         S.execLabelTween:Cancel()
